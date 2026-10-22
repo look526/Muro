@@ -150,7 +150,8 @@ public final class EngineController {
         for screen in NSScreen.screens {
             guard let uuid = displayUUID(for: screen) else { continue }
             guard let assignment = config.assignment(forDisplayUUID: uuid),
-                  let entry = manifest.wallpapers.first(where: { $0.id == assignment.wallpaperID })
+                  let entry = manifest.wallpapers.first(where: { $0.id == assignment.wallpaperID }),
+                  !entry.isImage
             else { continue }
             let url = resolveVideoURL(entry: entry, mode: assignment.mode, root: root)
             guard FileManager.default.fileExists(atPath: url.path) else {

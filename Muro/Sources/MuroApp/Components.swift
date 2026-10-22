@@ -90,8 +90,14 @@ struct ThumbImage: View {
     @Environment(\.galleryHidden) private var galleryHidden
     @Environment(\.inGallery) private var inGallery
 
+    private var localPath: String? {
+        item.isImage && maxPixels > ImageCache.gridPixels
+            ? store.mediaURL(for: item)?.path
+            : store.thumbnailPath(for: item)
+    }
+
     var body: some View {
-        let path = store.thumbnailPath(for: item)
+        let path = localPath
         // Not downloaded: the catalog thumbnail, read from the copy
         // ThumbnailCache saved, so a card scrolled back into view paints from
         // memory or disk instead of waiting on the network again.
@@ -160,7 +166,7 @@ struct ThumbImage: View {
         }.value
         // A scrolled-away card may have been reused for another wallpaper
         // while this was decoding, and a gallery hidden meanwhile wants none.
-        guard !Task.isCancelled, path == store.thumbnailPath(for: item) else { return }
+        guard !Task.isCancelled, path == localPath else { return }
         guard !(inGallery && GalleryVisibility.shared.isHiddenNow()) else {
             ImageCache.forget(path: path, maxPixels: pixels)
             return
@@ -239,7 +245,7 @@ struct TopBar: View {
                 Text("Muro")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(ink)
-                CreditLink(text: "made by \(Credits.name)")
+                CreditLink(text: "作者：\(Credits.name)")
             }
         }
     }
@@ -283,7 +289,7 @@ struct TopBar: View {
                 systemName: "magnifyingglass",
                 glyphScale: 0.42,
                 active: store.searchActive,
-                help: "Search wallpapers"
+                help: "搜索壁纸"
             ) {
                 if store.searchActive {
                     store.searchActive = false
@@ -300,7 +306,7 @@ struct TopBar: View {
                 systemName: "gearshape",
                 glyphScale: 0.44,
                 turns: true,
-                help: "Settings"
+                help: "设置"
             ) {
                 openSettingsWindow()
             }
@@ -323,7 +329,7 @@ extension TopBar {
             glyphScale: 0.44,
             active: store.whatsNewOpen,
             badged: update,
-            help: update ? "A new version of Muro is available" : "What's New in Muro"
+            help: update ? "Muro 有新版本可用" : "Muro 更新内容"
         ) {
             store.whatsNewOpen = true
             store.markUpdateSeen()
@@ -360,7 +366,7 @@ struct UpdateCallout: View {
             HStack(spacing: 9) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                Text("New update available")
+                Text("有新版本可用")
                     .font(.system(size: 12.5, weight: .semibold))
                     .fixedSize()
                 Button(action: dismiss) {
@@ -439,10 +445,10 @@ struct ImportButton: View {
             }
         }
         .onHover { hovering = $0 }
-        .help(store.importStatus ?? "Import your own video")
+        .help(store.importStatus ?? "导入图片或视频")
         .fileImporter(
             isPresented: $showImporter,
-            allowedContentTypes: [.movie, .mpeg4Movie, .quickTimeMovie],
+            allowedContentTypes: [.image, .movie, .mpeg4Movie, .quickTimeMovie],
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result { store.importFiles(urls) }
@@ -453,7 +459,7 @@ struct ImportButton: View {
 /// Muro's two `Window` scenes, by the titles SwiftUI gives them.
 enum MuroWindow {
     static let gallery = "Muro"
-    static let settings = "Muro Settings"
+    static let settings = "Muro 设置"
 }
 
 /// Nil while the app object does not exist yet. On macOS 14 SwiftUI builds
@@ -1008,7 +1014,7 @@ struct FPSChip: View {
 
 struct NewBadge: View {
     var body: some View {
-        Text("NEW")
+        Text("新增")
             .font(.system(size: 9, weight: .bold))
             .tracking(1)
             .foregroundStyle(Color.muroOnAccent)
@@ -1075,7 +1081,7 @@ struct DeleteButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
-        .help("Delete wallpaper")
+        .help("删除壁纸")
     }
 }
 
@@ -1205,20 +1211,20 @@ struct WallpaperCard: View {
         if item.id.hasPrefix(AppleAerials.picturePrefix) {
             guard store.canRemoveApplePicture(item), !showsDelete else { return [] }
             return [MenuOption(
-                title: "Remove Download (\(formatSize(item.sizeBytes)))",
+                title: "移除下载（\(formatSize(item.sizeBytes))）",
                 destructive: true
             ) { store.removeDownload(item) }]
         }
         guard item.isDownloaded, !showsDelete else { return [] }
         if item.remote == nil {
             return [MenuOption(
-                title: "Delete Wallpaper (\(formatSize(item.sizeBytes)))",
+                title: "删除壁纸（\(formatSize(item.sizeBytes))）",
                 destructive: true
             ) { store.requestDelete([item]) }]
         }
         if removableDownload {
             return [MenuOption(
-                title: "Remove Download (\(formatSize(item.sizeBytes)))",
+                title: "移除下载（\(formatSize(item.sizeBytes))）",
                 destructive: true
             ) { store.removeDownload(item) }]
         }
@@ -1252,7 +1258,7 @@ struct WallpaperCard: View {
         if persistentTitle || hovering {
             VStack(alignment: .leading, spacing: 2) {
                 if hovering && !persistentTitle {
-                    Text(item.category.uppercased())
+                    Text(item.categoryTitle)
                         .font(.system(size: 8.5, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Color.muroAccent)
@@ -1376,7 +1382,7 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.muroSecondary)
-            TextField("Search wallpapers…", text: $store.searchText)
+            TextField("搜索壁纸…", text: $store.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.muroInk)

@@ -52,7 +52,7 @@ struct AppleNoticeCard: View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         return VStack(alignment: .leading, spacing: 0) {
             header
-            Text("It brings Apple's own live wallpapers and screen savers into Muro:")
+            Text("在 Muro 中浏览 Apple 的动态壁纸和屏幕保护程序：")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.muroInk.opacity(0.86))
                 .fixedSize(horizontal: false, vertical: true)
@@ -108,10 +108,10 @@ struct AppleNoticeCard: View {
                 .shadow(color: .white.opacity(0.45), radius: 3)
                 .bubbleSurface(size: 40, tint: .white)
             VStack(alignment: .leading, spacing: 3) {
-                Text("About this section")
+                Text("关于此专区")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
-                Text("This section was added by community request.")
+                Text("此专区应社区用户的建议而添加。")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.muroAccent)
             }
@@ -124,13 +124,13 @@ struct AppleNoticeCard: View {
     /// 2026-10-02); the colour on the card is the subtitle and the note.
     private var kinds: some View {
         HStack(alignment: .top, spacing: 12) {
-            kind("Aerials", "Apple's videos of landscapes, cities, oceans and space") {
+            kind("航拍", "Apple 拍摄的自然风光、城市、海洋与太空视频") {
                 NoticeGlyph(kind: .aerials, size: 17)
             }
-            kind("Dynamic Wallpapers", "Videos, still pictures, and a few drawn live by macOS") {
+            kind("动态壁纸", "视频、静态图片，以及由 macOS 实时绘制的壁纸") {
                 NoticeGlyph(kind: .dynamic, size: 17)
             }
-            kind("Screen Savers", "8 of Apple's own, like Hello and Flurry") {
+            kind("屏幕保护程序", "8 款 Apple 屏幕保护程序，包括「你好」和「飘移」") {
                 PlaceGlyph(place: .screenSaver, size: 17)
             }
         }
@@ -172,9 +172,9 @@ struct AppleNoticeCard: View {
         HStack(spacing: 10) {
             NoticeGlyph(kind: .power, size: 15)
                 .opacity(0.72)
-            (Text("These are Apple's, not made for Muro, so some of them can use ")
-                + Text("more CPU, RAM and power").fontWeight(.semibold)
-                + Text(" than Muro's own live wallpapers."))
+            (Text("这些内容由 Apple 制作，部分内容可能比 Muro 壁纸占用")
+                + Text("更多 CPU、内存和电量").fontWeight(.semibold)
+                + Text("。"))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.muroWarn)
                 .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +190,7 @@ struct AppleNoticeCard: View {
             } label: {
                 HStack(spacing: 9) {
                     SelectionTick(isSelected: dontShowAgain, size: 18)
-                    Text("Do not show this message again")
+                    Text("不再显示此提示")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(dontShowAgain ? Color.muroInk : Color.muroInk.opacity(0.62))
                 }
@@ -199,7 +199,7 @@ struct AppleNoticeCard: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: 0)
-            PrimaryPill(title: "Got it") { close() }
+            PrimaryPill(title: "知道了") { close() }
         }
     }
 
@@ -243,11 +243,15 @@ struct AppleNoticeCard: View {
 private struct DarkGlass<S: Shape>: ViewModifier {
     let shape: S
 
-    func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Content) -> some View {
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular.tint(Color.muroShade.opacity(0.4)), in: shape)
         } else {
             content.background(.ultraThinMaterial, in: shape)
         }
+#else
+        content.background(.ultraThinMaterial, in: shape)
+#endif
     }
 }

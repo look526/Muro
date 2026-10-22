@@ -280,6 +280,7 @@ struct MuroApp: App {
 
         Window(MuroWindow.gallery, id: "main") {
             RootView()
+                .environment(\.locale, Locale(identifier: "zh_CN"))
                 .environmentObject(store)
                 // Its cards let go of their pictures while the window is hidden.
                 .tracksGalleryVisibility()
@@ -298,7 +299,7 @@ struct MuroApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
+                Button("设置…") {
                     openSettingsWindow()
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -307,6 +308,7 @@ struct MuroApp: App {
 
         Window(MuroWindow.settings, id: "settings") {
             SettingsView()
+                .environment(\.locale, Locale(identifier: "zh_CN"))
                 .environmentObject(store)
                 .muroColorScheme()
                 .onAppear { makeMinimiseHideTheWindow(titled: MuroWindow.settings) }
@@ -358,21 +360,21 @@ struct RootView: View {
         .animation(.muroTab, value: store.tab)
         .animation(.easeInOut(duration: 0.18), value: store.previewItem?.id)
         .animation(.easeOut(duration: 0.2), value: store.appleNoticeOpen)
-        .alert("Couldn’t set wallpaper", isPresented: Binding(
+        .alert("无法设置壁纸", isPresented: Binding(
             get: { store.applyError != nil },
             set: { if !$0 { store.applyError = nil } }
         )) {
-            Button("OK", role: .cancel) { store.applyError = nil }
+            Button("确定", role: .cancel) { store.applyError = nil }
         } message: {
-            Text(store.applyError ?? "Unknown error")
+            Text(store.applyError ?? "未知错误")
         }
-        .alert("Couldn’t import video", isPresented: Binding(
+        .alert("无法导入视频", isPresented: Binding(
             get: { store.importError != nil },
             set: { if !$0 { store.importError = nil } }
         )) {
-            Button("OK", role: .cancel) { store.importError = nil }
+            Button("确定", role: .cancel) { store.importError = nil }
         } message: {
-            Text(store.importError ?? "Unknown error")
+            Text(store.importError ?? "未知错误")
         }
         .sheet(item: $store.pendingDelete) { request in
             ConfirmDeleteView(request: request)
@@ -385,29 +387,29 @@ struct RootView: View {
         // The lock screen is set, macOS just has not noticed. A dead-end
         // error here is what people reported; this says what finishes it and
         // offers the button that gets them there.
-        .alert("One more step", isPresented: $store.lockScreenNeedsSystemSettings) {
-            Button("Open System Settings") {
+        .alert("还需一步", isPresented: $store.lockScreenNeedsSystemSettings) {
+            Button("打开系统设置") {
                 store.lockScreenNeedsSystemSettings = false
                 openWallpaperSettings()
             }
-            Button("Later", role: .cancel) { store.lockScreenNeedsSystemSettings = false }
+            Button("稍后", role: .cancel) { store.lockScreenNeedsSystemSettings = false }
         } message: {
-            Text("Muro set your lock screen wallpaper but macOS has not picked it up yet. Open System Settings, go to Wallpaper, and choose Muro to finish it.")
+            Text("锁屏壁纸已设置，但 macOS 尚未启用。请打开「系统设置」的「墙纸」页面，选择 Muro 完成设置。")
         }
         // A damaged library.json stops every edit, because Muro will not write
         // over a list it could not read. Saying so is the difference between
         // an app protecting the user's library and an app that has silently
         // stopped responding.
-        .alert("Muro cannot read your wallpaper list", isPresented: $store.libraryUnreadable) {
-            Button("Show the File") {
+        .alert("Muro 无法读取壁纸列表", isPresented: $store.libraryUnreadable) {
+            Button("显示文件") {
                 store.libraryUnreadable = false
                 NSWorkspace.shared.activateFileViewerSelecting([
                     LibraryManifest.manifestURL(root: store.root)
                 ])
             }
-            Button("Later", role: .cancel) { store.libraryUnreadable = false }
+            Button("稍后", role: .cancel) { store.libraryUnreadable = false }
         } message: {
-            Text("Your wallpapers are safe on disk, and Muro has stopped rather than overwrite the list with an empty one. Liking, importing and downloading will not work until library.json is repaired or moved out of Muro's folder.")
+            Text("壁纸文件仍安全保存在磁盘上。为避免覆盖列表，Muro 已暂停修改。请修复 library.json 或将其移出 Muro 文件夹，然后再收藏、导入或下载壁纸。")
         }
         .alert(
             Text(store.deleteNotice?.title ?? ""),
@@ -416,7 +418,7 @@ struct RootView: View {
                 set: { if !$0 { store.deleteNotice = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { store.deleteNotice = nil }
+            Button("确定", role: .cancel) { store.deleteNotice = nil }
         } message: {
             Text(store.deleteNotice?.message ?? "")
         }

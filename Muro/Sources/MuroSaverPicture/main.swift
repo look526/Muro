@@ -100,9 +100,9 @@ func grab() -> (image: CGImage, drawn: Double)? {
         bytes[(row * rowBytes)..<((row + 1) * rowBytes)] = raw[from..<(from + rowBytes)]
     }
     var lit = 0
-    for i in stride(from: 0, to: bytes.count, by: 4)
-    where Int(bytes[i]) + Int(bytes[i + 1]) + Int(bytes[i + 2]) > 60 {
-        lit += 1
+    for i in stride(from: 0, to: bytes.count, by: 4) {
+        let brightness = Int(bytes[i]) + Int(bytes[i + 1]) + Int(bytes[i + 2])
+        if brightness > 60 { lit += 1 }
     }
     guard let provider = CGDataProvider(data: Data(bytes) as CFData),
           let image = CGImage(

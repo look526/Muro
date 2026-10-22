@@ -31,12 +31,12 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .standard: return "Default"
-        case .outline: return "Outline"
-        case .glassMoon: return "Glass Moon"
-        case .planet: return "Planet"
-        case .peaks: return "Peaks"
-        case .display: return "Display"
+        case .standard: return "默认"
+        case .outline: return "轮廓"
+        case .glassMoon: return "玻璃月亮"
+        case .planet: return "行星"
+        case .peaks: return "山峰"
+        case .display: return "显示器"
         }
     }
 

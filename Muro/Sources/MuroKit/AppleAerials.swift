@@ -529,7 +529,7 @@ extension AppleAerials {
                 from: data, options: [], format: nil)) as? [String: Any]
         else { return [:] }
 
-        for code in preferredLanguageCodes() {
+        for code in ["zh_CN", "zh_Hans", "zh"] + preferredLanguageCodes() {
             if let strings = table[code] as? [String: String] { return strings }
         }
         // Better a table in a language nobody asked for than aerials named

@@ -314,7 +314,7 @@ struct MetaChip: View {
 /// The green "PLAYING" marker on a running playlist or automation. A card
 /// says where it is playing too: "PLAYING ON DESKTOP".
 struct PlayingChip: View {
-    var text = "PLAYING"
+    var text = "正在播放"
 
     var body: some View {
         HStack(spacing: 5) {
@@ -1184,6 +1184,7 @@ private struct GlassMaterial: ViewModifier {
     let tint: Double
 
     @ViewBuilder func body(content: Content) -> some View {
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular.tint(Color.muroShade.opacity(tint)), in: shape)
         } else {
@@ -1191,6 +1192,11 @@ private struct GlassMaterial: ViewModifier {
                 .background(shape.fill(Color.muroShade.opacity(tint)))
                 .background(.ultraThinMaterial, in: shape)
         }
+#else
+        content
+            .background(shape.fill(Color.muroShade.opacity(tint)))
+            .background(.ultraThinMaterial, in: shape)
+#endif
     }
 }
 
@@ -1269,7 +1275,7 @@ struct CustomValueCard<Unit: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
             Button(action: apply) {
-                Text(canApply ? applyLabel : "Enter a number")
+                Text(canApply ? applyLabel : "请输入数字")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroOnInk)
                     .frame(maxWidth: .infinity)

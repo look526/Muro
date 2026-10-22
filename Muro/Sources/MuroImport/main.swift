@@ -1,9 +1,9 @@
 import Foundation
 import MuroKit
 
-// muro-import: brings a video into the Muro library.
+// muro-import: brings an image or video into the Muro library.
 //   muro-import --title "Snowy Japan" --category "Nature" [--library DIR]
-//               [--original] <video>
+//               [--original] <image-or-video>
 // Makes the master, a thumbnail and a p720 preview, then appends the
 // wallpaper to library.json.
 //
@@ -44,7 +44,7 @@ while !args.isEmpty {
 }
 
 guard let sourcePath else {
-    fail("usage: muro-import --title T --category C [--library DIR] [--original] <video>")
+    fail("usage: muro-import --title T --category C [--library DIR] [--original] <image-or-video>")
 }
 let source = URL(fileURLWithPath: sourcePath)
 guard FileManager.default.fileExists(atPath: source.path) else {
@@ -53,7 +53,7 @@ guard FileManager.default.fileExists(atPath: source.path) else {
 
 do {
     let started = Date()
-    let entry = try importVideo(
+    let entry = try importMedia(
         source: source,
         title: title,
         category: category ?? "Uncategorized",
@@ -66,7 +66,8 @@ do {
         format: "imported \"%@\" [%@] %dx%d @%.0ffps %.0fs %.1fMB %@ (took %.1fs) id=%@",
         entry.title, entry.category, entry.width, entry.height,
         entry.fps, entry.duration, mb,
-        preserveOriginal ? "original quality" : "hevc", secs, entry.id
+        entry.isImage ? "original image" : (preserveOriginal ? "original quality" : "hevc"),
+        secs, entry.id
     ))
 } catch let error as LibraryWriter.WriteError {
     // This one has a sentence written for a person. Interpolating it would

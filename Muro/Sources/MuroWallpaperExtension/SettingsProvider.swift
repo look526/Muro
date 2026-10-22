@@ -82,7 +82,7 @@ func makeSettingsResponse() -> AnyObject? {
             provider: provider,
             identifier: entry.id,
             name: entry.title,
-            localizedDescription: "Muro live wallpaper",
+            localizedDescription: "Muro 动态壁纸",
             thumbnail: .image(url: thumbnail),
             isDownloaded: true,
             options: []
@@ -102,7 +102,7 @@ func makeSettingsResponse() -> AnyObject? {
     let group = SettingsGroup(
         id: GroupID(id: "muro-live-wallpapers"),
         items: items,
-        localizedName: "Muro — Live Wallpapers",
+        localizedName: "Muro 动态壁纸",
         disposability: .none,
         sortOrder: -90,
         sortID: GroupSortID(id: "com.apple.wallpaper.aerials"),

@@ -82,6 +82,10 @@ struct PreviewView: View {
     /// Asks for the aerial's real size and its sharp picture at once, so the
     /// bar never shows a guess for longer than one small request takes.
     private func prepareAerial() {
+        if item?.isImage == true {
+            store.applySurface = .desktop
+            return
+        }
         // A screen saver opens on the Screen saver place, the one it is for.
         // Desktop and Lock screen are still one click away in the panel.
         if itemID.hasPrefix(AppleScreenSavers.idPrefix), store.lockScreenAvailable {
@@ -104,7 +108,9 @@ struct PreviewView: View {
     @ViewBuilder private func media(_ item: WallpaperItem) -> some View {
         GeometryReader { proxy in
             Group {
-                if let url = store.videoURL(for: item, mode: store.previewMode) ??
+                if item.isImage {
+                    ThumbImage(item: item, maxPixels: ImageCache.fullPixels)
+                } else if let url = store.videoURL(for: item, mode: store.previewMode) ??
                              store.videoURL(for: item, mode: "smooth") {
                     // Downloaded → the real master, full quality.
                     LoopingPlayerView(url: url)
@@ -187,7 +193,7 @@ struct PreviewView: View {
             .frame(maxWidth: 240, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
 
-            if !isAerial, let url = store.videoURL(for: item, mode: "smooth") {
+            if !isAerial, let url = store.mediaURL(for: item) {
                 ShareLink(item: shareFile ?? url) {
                     // The forward arrow, not the box with an arrow out of it.
                     // The box is the system default and reads as generic
@@ -209,7 +215,7 @@ struct PreviewView: View {
                 fpsToggle(item)
             }
 
-            if item.isDownloaded, !isAerial { pauseAfterPill(item) }
+            if item.isDownloaded, !isAerial, !item.isImage { pauseAfterPill(item) }
 
             HeartButton(item: item, size: 40)
 
@@ -258,22 +264,26 @@ struct PreviewView: View {
     /// Size, dimensions and length, or for Apple's pictures and the ones
     /// macOS draws, what they are, since those have no length to give.
     private func metaLine(_ item: WallpaperItem) -> String {
+        if item.isImage {
+            let line = "静态图片 · \(item.width)×\(item.height) · \(formatSize(item.sizeBytes))"
+            return store.missingVideo(item) != nil ? "图片文件缺失 · " + line : line
+        }
         // macOS animates these when they appear and when the Mac is
         // unlocked, then holds them still, as it does in System Settings.
-        if item.id.hasPrefix(AppleAerials.drawnPrefix) { return "Drawn by macOS · moves when you unlock" }
-        if item.id.hasPrefix(AppleScreenSavers.idPrefix) { return "Screen saver · drawn live by macOS" }
+        if item.id.hasPrefix(AppleAerials.drawnPrefix) { return "macOS 实时绘制 · 解锁时播放" }
+        if item.id.hasPrefix(AppleScreenSavers.idPrefix) { return "屏幕保护程序 · macOS 实时绘制" }
         if item.id.hasPrefix(AppleAerials.picturePrefix) {
             // Apple sends every picture of the day in one download, and Muro
             // keeps only the one this card stands for, so the two sizes are
             // far apart. Each is said for what it is.
             let size = store.isApplePictureDownloaded(item)
                 ? formatSize(item.sizeBytes)
-                : "\(formatSize(item.sizeBytes)) download"
-            return "Still picture · \(item.width)×\(item.height) · \(size)"
+                : "需下载 \(formatSize(item.sizeBytes))"
+            return "静态图片 · \(item.width)×\(item.height) · \(size)"
         }
         let line = "\(item.width)×\(item.height) · \(formatSize(item.sizeBytes)) · \(formatDuration(item.duration))"
         // Its picture still shows, so say why nothing moves.
-        return store.missingVideo(item) != nil ? "Video file missing · " + line : line
+        return store.missingVideo(item) != nil ? "视频文件缺失 · " + line : line
     }
 
     /// A video that will not fill a screen well, said before it is set.
@@ -285,8 +295,8 @@ struct PreviewView: View {
     /// this speaks about the person's own videos.
     private func fitWarning(_ item: WallpaperItem) -> String? {
         guard item.width > 0, item.height > 0 else { return nil }
-        if item.height > item.width { return "Vertical video · zoomed in to fill the screen" }
-        if item.width < 1920 { return "Low resolution · may look soft on the screen" }
+        if item.height > item.width { return "竖屏\(item.isImage ? "图片" : "视频") · 放大以填满屏幕" }
+        if item.width < 1920 { return "分辨率较低 · 显示可能不够清晰" }
         return nil
     }
 
@@ -318,8 +328,8 @@ struct PreviewView: View {
 
     private func fpsToggle(_ item: WallpaperItem) -> some View {
         HStack(spacing: 2) {
-            fpsSegment("\(standardFrameRate(item.fps))", mode: "smooth", hint: "Higher CPU", item: item)
-            fpsSegment("30", mode: "efficient", hint: "Lower CPU", item: item)
+            fpsSegment("\(standardFrameRate(item.fps))", mode: "smooth", hint: "CPU 占用较高", item: item)
+            fpsSegment("30", mode: "efficient", hint: "CPU 占用较低", item: item)
         }
         .padding(3)
         .background(Capsule().fill(Color.muroInk.opacity(0.08)))
@@ -336,7 +346,7 @@ struct PreviewView: View {
             .background { if selected { Capsule().fill(Color.muroInk) } }
             .contentShape(Capsule())
             .onTapGesture { store.setPreviewMode(mode, for: item) }
-            .help("\(label) fps · \(hint)")
+            .help("\(label) 帧/秒 · \(hint)")
     }
 
     // MARK: - Pause after (per wallpaper)
@@ -354,13 +364,13 @@ struct PreviewView: View {
         // Centred on the pill: it sits in the middle of the bottom bar, so a
         // menu hanging off either edge of it looks like a mistake.
         return GlassDropdown(width: 190, arrowEdge: .top, align: .center, options: {
-            [MenuOption(title: "Use setting (\(SettingsView.pauseAfterLabel(store.pauseAfterSeconds)))",
+            [MenuOption(title: "使用全局设置（\(SettingsView.pauseAfterLabel(store.pauseAfterSeconds))）",
                         checked: !overridden) {
                 store.setPauseAfter(nil, for: item)
             }, .divider]
             + choices.map { seconds in
                 MenuOption(
-                    title: seconds == 0 ? "Never pause" : durationLabel(seconds),
+                    title: seconds == 0 ? "从不暂停" : durationLabel(seconds),
                     checked: overridden && value == seconds
                 ) { store.setPauseAfter(seconds == 0 ? -1 : seconds, for: item) }
             }
@@ -369,7 +379,7 @@ struct PreviewView: View {
             // tick whenever the time is not one of the list's, which includes
             // a 2 or 15 minute time picked before the list was shortened.
             + [.divider, MenuOption(
-                title: "Custom",
+                title: "自定义",
                 checked: overridden && value > 0 && !choices.contains(value)
             ) { customPauseAfter = true }]
         }) {
@@ -377,7 +387,7 @@ struct PreviewView: View {
                 Image(systemName: "pause.circle")
                     .font(.system(size: 12))
                     .foregroundStyle(overridden ? Color.muroAccent : Color.muroInk.opacity(0.75))
-                Text(value == 0 ? "Off" : durationLabel(value))
+                Text(value == 0 ? "关闭" : durationLabel(value))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(overridden ? Color.muroAccent : Color.muroInk)
             }
@@ -395,7 +405,7 @@ struct PreviewView: View {
                 set: { store.setPauseAfter($0, for: item) }
             )) { customPauseAfter = false }
         }
-        .help("Pause after: how long this wallpaper moves before holding on a frame")
+        .help("定时暂停：播放指定时长后停留在当前画面")
     }
 
     // MARK: - Download / Set Wallpaper
@@ -409,7 +419,7 @@ struct PreviewView: View {
                     .progressViewStyle(.linear)
                     .tint(Color.muroInk)
                     .frame(width: 70)
-                Text("\(Int(progress * 100))% of \(formatSize(item.sizeBytes))")
+                Text("\(Int(progress * 100))% · 共 \(formatSize(item.sizeBytes))")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.muroInk.opacity(0.8))
                     .monospacedDigit()
@@ -425,15 +435,15 @@ struct PreviewView: View {
             // plain (owner, 2026-07-19): the size already sits in the
             // subtitle, and the progress capsule shows "% of NN MB".
             HStack(spacing: 10) {
-                glassButton("Download", systemName: "arrow.down") {
+                glassButton("下载", systemName: "arrow.down") {
                     store.download(item)
                 }
-                capsuleButton("Preview", systemName: "play.fill") {
+                capsuleButton("预览", systemName: "play.fill") {
                     store.download(item)
                 }
             }
         } else if store.generating.contains(item.id) {
-            Text("Preparing 30 fps…")
+            Text("正在准备 30 帧版本…")
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
                 .foregroundStyle(Color.muroInk.opacity(0.75))
@@ -456,7 +466,7 @@ struct PreviewView: View {
             }
             .buttonStyle(.plain)
         } else {
-            capsuleButton("Set Wallpaper", systemName: nil) {
+            capsuleButton("设置壁纸", systemName: nil) {
                 showDisplayPopover.toggle()
             }
         }
@@ -473,7 +483,7 @@ struct PreviewView: View {
                     .progressViewStyle(.linear)
                     .tint(Color.muroInk)
                     .frame(width: 70)
-                Text("\(Int(progress * 100))% of \(formatSize(item.sizeBytes))")
+                Text("\(Int(progress * 100))% · 共 \(formatSize(item.sizeBytes))")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.muroInk.opacity(0.8))
                     .monospacedDigit()
@@ -494,15 +504,15 @@ struct PreviewView: View {
             // Download fetches the full picture from Apple. Set Wallpaper does
             // the same by itself when it has to (owner, 2026-09-30).
             HStack(spacing: 10) {
-                glassButton("Download", systemName: "arrow.down") {
+                glassButton("下载", systemName: "arrow.down") {
                     store.downloadApplePictureNow(item)
                 }
-                capsuleButton("Set Wallpaper", systemName: nil) {
+                capsuleButton("设置壁纸", systemName: nil) {
                     showDisplayPopover.toggle()
                 }
             }
         } else {
-            capsuleButton("Set Wallpaper", systemName: nil) {
+            capsuleButton("设置壁纸", systemName: nil) {
                 showDisplayPopover.toggle()
             }
         }
@@ -514,12 +524,12 @@ struct PreviewView: View {
     /// The hidden "Set Wallpaper" keeps it exactly that button's size.
     private var settingFace: some View {
         ZStack {
-            Text("Set Wallpaper")
+            Text("设置壁纸")
                 .font(.system(size: 13, weight: .semibold))
                 .hidden()
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small).tint(Color.muroInk)
-                Text("Setting…")
+                Text("正在设置…")
                     .font(.system(size: 13, weight: .semibold))
             }
         }
@@ -535,13 +545,13 @@ struct PreviewView: View {
     /// say where); the panel this opens shows where it is, with a green dot.
     private var appliedFace: some View {
         ZStack {
-            Text("Set Wallpaper")
+            Text("设置壁纸")
                 .font(.system(size: 13, weight: .semibold))
                 .hidden()
             HStack(spacing: 7) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                Text("Applied")
+                Text("已应用")
                     .font(.system(size: 13, weight: .semibold))
             }
         }
@@ -642,7 +652,7 @@ struct ChooseDisplayPopover: View {
             // instead, and every label is pinned to one line so this can never
             // be a silent wrap again.
             HStack(spacing: Self.pillGap) {
-                ForEach(ApplySurface.allCases, id: \.self) { surface in
+                ForEach(item.isImage ? [.desktop] : ApplySurface.allCases, id: \.self) { surface in
                     surfacePill(surface)
                 }
             }
@@ -678,11 +688,11 @@ struct ChooseDisplayPopover: View {
             }
             .frame(width: 40, height: 40)
 
-            Text("This needs macOS 26")
+            Text("需要 macOS 26")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
 
-            Text("The lock screen and the screen saver use a part of macOS that arrived in macOS 26. This Mac runs \(Self.osLabel), so Muro can set your desktop but not those.")
+            Text("锁屏和屏幕保护程序需要 macOS 26 的系统功能。本机运行 \(Self.osLabel)，目前仅支持设置桌面壁纸。")
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -692,7 +702,7 @@ struct ChooseDisplayPopover: View {
             Button {
                 withAnimation(Self.ease) { showLockRequirement = false }
             } label: {
-                Text("Set my desktop instead")
+                Text("改为设置桌面壁纸")
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .padding(.horizontal, 16)
@@ -722,7 +732,7 @@ struct ChooseDisplayPopover: View {
                 // is no display to choose. Saying so is better than a picker
                 // whose choice does not matter, and better than hiding the
                 // card people are used to clicking.
-                Text(isScreenSaver ? "Every display" : "Choose display")
+                Text(isScreenSaver ? "所有显示器" : "选择显示器")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
                 Spacer()
@@ -787,7 +797,7 @@ struct ChooseDisplayPopover: View {
             // macOS refuses a still picture as the screen saver (it asks for
             // files a picture record does not have), so there is nothing to
             // apply. Said here rather than offering a card that fails.
-            Text("macOS can't use a still picture as the screen saver.")
+            Text("macOS 无法将静态图片设为屏幕保护程序。")
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -811,16 +821,16 @@ struct ChooseDisplayPopover: View {
             } label: {
                 cardLabel(
                     symbol: "display.2",
-                    name: "All Screens",
-                    sublabel: "Every display",
+                    name: "所有屏幕",
+                    sublabel: "所有显示器",
                     applied: applied
                 )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
                 applied
-                    ? "Remove \(item.title) from the screen saver"
-                    : "Apply \(item.title) to the screen saver"
+                    ? "从屏幕保护程序移除「\(item.title)」"
+                    : "将「\(item.title)」设为屏幕保护程序"
             )
         }
         .frame(maxWidth: .infinity)
@@ -856,7 +866,7 @@ struct ChooseDisplayPopover: View {
             }
             .padding(.horizontal, 8)
             if applied {
-                Text("Remove")
+                Text("移除")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color(hex: 0xFF6B6B))
                     .padding(.horizontal, 11)
@@ -911,7 +921,7 @@ struct ChooseDisplayPopover: View {
                 store.applySurface = surface
             }
         } label: {
-            Text(surface.rawValue)
+            Text(surface.title)
                 .font(.system(size: 11.5, weight: .semibold))
                 .lineLimit(1)
                 .fixedSize()
@@ -939,9 +949,9 @@ struct ChooseDisplayPopover: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Apply to \(surface.rawValue.lowercased())")
-        .accessibilityValue(selected ? "Selected" : "Not selected")
-        .help(enabled ? "" : "The lock screen and screen saver require macOS 26 or later")
+        .accessibilityLabel("应用到\(surface.title)")
+        .accessibilityValue(selected ? "已选择" : "未选择")
+        .help(enabled ? "" : "锁屏和屏幕保护程序需要 macOS 26 或更新版本")
     }
 
     private var allPill: some View {
@@ -953,7 +963,7 @@ struct ChooseDisplayPopover: View {
                 apply(.all)
             }
         } label: {
-            Text(appliedEverywhere ? "Remove all" : "All displays")
+            Text(appliedEverywhere ? "全部移除" : "所有显示器")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(appliedEverywhere ? Color(hex: 0xFF6B6B) : Color.muroInk)
                 .padding(.horizontal, 13)
@@ -971,7 +981,7 @@ struct ChooseDisplayPopover: View {
                 ))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(appliedEverywhere ? "Remove from all displays" : "Apply to all displays")
+        .accessibilityLabel(appliedEverywhere ? "从所有显示器移除" : "应用到所有显示器")
     }
 
     private func displayCard(_ display: DisplayInfo) -> some View {
@@ -1001,8 +1011,8 @@ struct ChooseDisplayPopover: View {
         .buttonStyle(.plain)
         .accessibilityLabel(
             appliedHere
-                ? "Remove \(item.title) from \(display.displayName)"
-                : "Apply \(item.title) to \(display.displayName)"
+                ? "从\(display.displayName)移除「\(item.title)」"
+                : "将「\(item.title)」应用到\(display.displayName)"
         )
     }
 }

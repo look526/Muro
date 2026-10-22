@@ -222,7 +222,7 @@ private final class WallpaperXPCHandler: NSObject, WallpaperExtensionXPCProtocol
             AcquireReceipt.record(
                 id: info.choiceID, preview: info.isPreview, ok: false, detail: "not staged"
             )
-            reply(nil, extensionError(2, "The selected Muro video is not staged."))
+            reply(nil, extensionError(2, "所选 Muro 视频尚未准备就绪。"))
             return
         }
 
@@ -235,7 +235,7 @@ private final class WallpaperXPCHandler: NSObject, WallpaperExtensionXPCProtocol
             AcquireReceipt.record(
                 id: info.choiceID, preview: info.isPreview, ok: false, detail: "no context"
             )
-            reply(nil, extensionError(3, "Could not create the remote wallpaper context."))
+            reply(nil, extensionError(3, "无法创建远程壁纸上下文。"))
             return
         }
 
@@ -259,7 +259,7 @@ private final class WallpaperXPCHandler: NSObject, WallpaperExtensionXPCProtocol
             AcquireReceipt.record(
                 id: info.choiceID, preview: info.isPreview, ok: false, detail: "no remote context"
             )
-            reply(nil, extensionError(4, "Could not wrap the remote wallpaper context."))
+            reply(nil, extensionError(4, "无法封装远程壁纸上下文。"))
             return
         }
 
@@ -380,7 +380,7 @@ private final class WallpaperXPCHandler: NSObject, WallpaperExtensionXPCProtocol
                 choiceID: choiceID,
                 size: RendererState.shared.snapshotSize
             ) else {
-                reply(nil, self.extensionError(6, "No Muro wallpaper to snapshot."))
+                reply(nil, self.extensionError(6, "没有可生成快照的 Muro 壁纸。"))
                 return
             }
             extensionTrace("snapshot provided for \(choiceID ?? "none")")
@@ -399,7 +399,7 @@ private final class WallpaperXPCHandler: NSObject, WallpaperExtensionXPCProtocol
             reply(nil, NSError(
                 domain: extensionDomain,
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Muro choices could not be built."]
+                userInfo: [NSLocalizedDescriptionKey: "无法生成 Muro 壁纸选项。"]
             ))
         }
     }

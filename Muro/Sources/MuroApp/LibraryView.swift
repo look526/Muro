@@ -10,11 +10,11 @@ struct LibraryView: View {
     /// stopped needing one: Liked now lists the catalog too, so the tab beside
     /// it was the narrower of the two while calling itself All.
     enum LibTab: String, CaseIterable {
-        case all = "Downloaded", liked = "Liked"
+        case all = "已下载", liked = "已收藏"
         /// Playlists and automations share one tab, under the one Now Playing
         /// bar that plays them. A switch inside it picks which of the two the
         /// grid shows.
-        case schedules = "Playlists & Automations"
+        case schedules = "播放列表与自动化"
     }
 
     /// Which of the two the Playlists & Automations tab is showing.
@@ -55,6 +55,7 @@ struct LibraryView: View {
         store.searchText.isEmpty
             || item.title.localizedCaseInsensitiveContains(store.searchText)
             || item.category.localizedCaseInsensitiveContains(store.searchText)
+            || item.categoryTitle.localizedCaseInsensitiveContains(store.searchText)
     }
 
     private var searched: [WallpaperItem] {
@@ -193,16 +194,16 @@ struct LibraryView: View {
             PillSegments(
                 options: [
                     PillOption(
-                        LibTab.all.rawValue, "Downloaded",
+                        LibTab.all.rawValue, "已下载",
                         count: store.localItems.count + store.appleLibraryItems.count + saverItems.count
                     ),
                     PillOption(
-                        LibTab.liked.rawValue, "Liked",
+                        LibTab.liked.rawValue, "已收藏",
                         count: store.likedItems.count + store.likedAppleItems.count
                             + saverItems.filter(\.liked).count
                     ),
                     PillOption(
-                        LibTab.schedules.rawValue, "Playlists & Automations",
+                        LibTab.schedules.rawValue, "播放列表与自动化",
                         count: store.playlists.count + store.automations.count
                     )
                 ],
@@ -257,7 +258,7 @@ struct LibraryView: View {
             HStack(spacing: 7) {
                 Image(systemName: selecting ? "xmark" : "checkmark.circle")
                     .font(.system(size: 11, weight: .semibold))
-                Text(selecting ? "Done" : "Select")
+                Text(selecting ? "完成" : "选择")
                     .font(.system(size: 12.5, weight: .semibold))
             }
             .foregroundStyle(selecting ? Color.muroOnInk : Color.muroInk.opacity(0.88))
@@ -280,7 +281,7 @@ struct LibraryView: View {
     private var selectAllButton: some View {
         let all = Set(visibleItems.map(\.id))
         let everything = !all.isEmpty && selected.isSuperset(of: all)
-        return Button(everything ? "Select None" : "Select All") {
+        return Button(everything ? "取消全选" : "全选") {
             selected = everything ? [] : all
         }
         .buttonStyle(.plain)
@@ -296,13 +297,13 @@ struct LibraryView: View {
     /// grid without pushing anything, the way the pill bar does in the preview.
     private var batchBar: some View {
         HStack(spacing: 14) {
-            Text("\(selected.count) selected")
+            Text("已选择 \(selected.count) 项")
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
                 .lineLimit(1)
                 .fixedSize()
             Rectangle().fill(Color.muroInk.opacity(0.14)).frame(width: 1, height: 18)
-            Button("Clear") { selected = [] }
+            Button("取消选择") { selected = [] }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
@@ -314,7 +315,7 @@ struct LibraryView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "trash")
                         .font(.system(size: 11, weight: .semibold))
-                    Text("Delete")
+                    Text("删除")
                         .font(.system(size: 12.5, weight: .semibold))
                         .lineLimit(1)
                         .fixedSize()
@@ -354,10 +355,10 @@ struct LibraryView: View {
             PlusBubble(size: 56, hovering: lit, pressed: pressingDrop)
             VStack(alignment: .leading, spacing: 4) {
                 Text(store.importStatus ?? addedNote ?? store.importNote
-                     ?? "Drop videos or screen savers here, or click to import")
+                     ?? "拖入图片、视频或屏幕保护程序，或点击导入")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
-                Text("MP4, MOV and M4V videos, and .saver screen savers")
+                Text("JPEG、PNG、HEIC 等图片 · MP4、MOV、M4V 视频 · .saver")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.muroSecondary)
             }
@@ -412,7 +413,7 @@ struct LibraryView: View {
         // `com.apple.systempreference.screen-saver`; `.bundle` still lets one
         // be picked on a Mac where that type is missing.
         let saver = UTType("com.apple.systempreference.screen-saver") ?? .bundle
-        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, saver]
+        panel.allowedContentTypes = [.image, .movie, .mpeg4Movie, .quickTimeMovie, saver]
         panel.allowsMultipleSelection = true
         if panel.runModal() == .OK {
             take(panel.urls)
@@ -431,13 +432,13 @@ struct LibraryView: View {
     private func note(_ result: (added: [String], already: [String])) {
         let text: String
         if result.added.count == 1 {
-            text = "\(result.added[0]) added."
+            text = "已添加「\(result.added[0])」。"
         } else if result.added.count > 1 {
-            text = "\(result.added.count) screen savers added."
+            text = "已添加 \(result.added.count) 个屏幕保护程序。"
         } else if result.already.count == 1 {
-            text = "\(result.already[0]) is already added."
+            text = "「\(result.already[0])」已添加。"
         } else if !result.already.isEmpty {
-            text = "Those screen savers are already added."
+            text = "这些屏幕保护程序已添加。"
         } else {
             return
         }
@@ -493,7 +494,7 @@ struct LibraryView: View {
     @ViewBuilder private func saverGroup(_ items: [WallpaperItem]) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel("YOUR SCREEN SAVERS", trailing: "\(items.count)")
+                SectionLabel("我的屏幕保护程序", trailing: "\(items.count)")
                 grid(items: items)
             }
             .padding(.top, 6)
@@ -506,7 +507,7 @@ struct LibraryView: View {
     @ViewBuilder private func appleGroup(_ items: [WallpaperItem]) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel("FROM APPLE", trailing: "\(items.count)")
+                SectionLabel("来自 Apple", trailing: "\(items.count)")
                 grid(items: items)
             }
             .padding(.top, 6)
@@ -524,8 +525,8 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 18) {
                 PillSegments(
                     options: [
-                        PillOption(ScheduleKind.playlists.rawValue, "Playlists", count: store.playlists.count),
-                        PillOption(ScheduleKind.automations.rawValue, "Automations", count: store.automations.count)
+                        PillOption(ScheduleKind.playlists.rawValue, "播放列表", count: store.playlists.count),
+                        PillOption(ScheduleKind.automations.rawValue, "自动化", count: store.automations.count)
                     ],
                     selection: Binding(
                         get: { scheduleKind.rawValue },
@@ -561,8 +562,8 @@ struct LibraryView: View {
                 }
             }
             NewThingCard(
-                title: "New Playlist",
-                subtitle: "Pick wallpapers and cycle them on a schedule",
+                title: "新建播放列表",
+                subtitle: "选择壁纸并按计划轮换",
                 height: 200
             ) { editorTarget = .new }
         }
@@ -578,8 +579,8 @@ struct LibraryView: View {
                 }
             }
             NewThingCard(
-                title: "New Automation",
-                subtitle: "Give each wallpaper its own time of day, or its own length",
+                title: "新建自动化",
+                subtitle: "为每张壁纸设置播放时段或时长",
                 height: 200
             ) { automationTarget = .new }
         }
@@ -646,9 +647,9 @@ struct PlaylistCard: View {
 
     private var intervalText: String {
         switch playlist.intervalMinutes {
-        case ..<60: return "Every \(playlist.intervalMinutes) min"
-        case 60: return "Every hour"
-        default: return "Every \(playlist.intervalMinutes / 60) hr"
+        case ..<60: return "每 \(playlist.intervalMinutes) 分钟"
+        case 60: return "每小时"
+        default: return "每 \(playlist.intervalMinutes / 60) 小时"
         }
     }
 
@@ -668,10 +669,10 @@ struct PlaylistCard: View {
             HStack(spacing: 8) {
                 MetaChip(
                     systemImage: "rectangle.stack",
-                    text: "\(playlist.wallpaperIDs.count) wallpaper\(playlist.wallpaperIDs.count == 1 ? "" : "s")"
+                    text: "\(playlist.wallpaperIDs.count) 张壁纸"
                 )
                 MetaChip(systemImage: "clock", text: intervalText)
-                MetaChip(systemImage: "shuffle", text: playlist.shuffle ? "Shuffle on" : "Shuffle off")
+                MetaChip(systemImage: "shuffle", text: playlist.shuffle ? "随机播放开启" : "随机播放关闭")
             }
             .padding(.top, 11)
             Spacer(minLength: 8)
@@ -689,21 +690,21 @@ struct PlaylistCard: View {
         // Custom right-click menu in the app's glass style instead of the
         // stock macOS context menu.
         .glassContextMenu(width: 190) { menuOptions }
-        .confirmScheduleDelete($confirmingDelete, kind: "playlist", name: playlist.name) {
+        .confirmScheduleDelete($confirmingDelete, kind: "播放列表", name: playlist.name) {
             store.deletePlaylist(playlist)
         }
     }
 
     private var menuOptions: [MenuOption] {
         [
-            MenuOption(title: "Edit Playlist") { onEdit() },
-            MenuOption(title: playlist.shuffle ? "Shuffle Off" : "Shuffle On") {
+            MenuOption(title: "编辑播放列表") { onEdit() },
+            MenuOption(title: playlist.shuffle ? "关闭随机播放" : "开启随机播放") {
                 var updated = playlist
                 updated.shuffle.toggle()
                 store.updatePlaylist(updated)
             },
             .divider,
-            MenuOption(title: "Delete Playlist", destructive: true) {
+            MenuOption(title: "删除播放列表", destructive: true) {
                 confirmingDelete = true
             }
         ]
@@ -788,27 +789,27 @@ struct AutomationCard: View {
         let count = automation.steps.count
         let wallpapers = MetaChip(
             systemImage: "rectangle.stack",
-            text: "\(count) wallpaper\(count == 1 ? "" : "s")"
+            text: "\(count) 张壁纸"
         )
         // With every wallpaper deleted out of it, an automation still said
         // "Covers the whole day" over an empty timeline (full check,
         // 2026-10-01). An empty schedule covers nothing and plays nothing.
         guard count > 0 else {
             return [wallpapers, MetaChip(systemImage: "exclamationmark.triangle",
-                                         text: "Nothing to play", tint: Color.muroWarn)]
+                                         text: "暂无可播放内容", tint: Color.muroWarn)]
         }
         switch automation.mode {
         case .timer:
             return [wallpapers, MetaChip(systemImage: "arrow.triangle.2.circlepath",
-                                         text: "\(durationLabel(automation.cycleSeconds)) cycle")]
+                                         text: "循环时长 \(durationLabel(automation.cycleSeconds))")]
         case .clock:
             let gaps = automation.uncoveredWindows
             return [
                 wallpapers,
                 gaps.isEmpty
-                    ? MetaChip(systemImage: "checkmark.circle", text: "Covers the whole day")
+                    ? MetaChip(systemImage: "checkmark.circle", text: "覆盖全天")
                     : MetaChip(systemImage: "exclamationmark.triangle",
-                               text: "\(gaps.count) gap\(gaps.count == 1 ? "" : "s")",
+                               text: "\(gaps.count) 段空白时段",
                                tint: Color.muroWarn)
             ]
         }
@@ -821,7 +822,7 @@ struct AutomationCard: View {
               let step = automation.clockStep(at: AutomationScheduler.minuteOfDay()),
               let item = store.item(id: step.wallpaperID)
         else { return nil }
-        return "Now: \(item.title) until \(clockLabel(step.end))"
+        return "当前：\(item.title)，至 \(clockLabel(step.end))"
     }
 
     var body: some View {
@@ -833,7 +834,7 @@ struct AutomationCard: View {
                     .lineLimit(1)
                 MetaChip(
                     systemImage: automation.mode == .clock ? "clock" : "timer",
-                    text: automation.mode == .clock ? "CLOCK" : "TIMER",
+                    text: automation.mode == .clock ? "按时段" : "按时长",
                     tint: Color.muroAccent
                 )
                 if let playingLabel { PlayingChip(text: playingLabel) }
@@ -864,7 +865,7 @@ struct AutomationCard: View {
         .onHover { hovering = $0 }
         .onTapGesture { onEdit() }
         .glassContextMenu(width: 200) { menuOptions }
-        .confirmScheduleDelete($confirmingDelete, kind: "automation", name: automation.name) {
+        .confirmScheduleDelete($confirmingDelete, kind: "自动化", name: automation.name) {
             store.deleteAutomation(automation)
         }
     }
@@ -879,7 +880,7 @@ struct AutomationCard: View {
                     timerStep(step, index: index)
                 }
                 if automation.steps.isEmpty {
-                    Text("No wallpapers in this automation yet")
+                    Text("此自动化中暂无壁纸")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Color.muroSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -925,9 +926,9 @@ struct AutomationCard: View {
 
     private var menuOptions: [MenuOption] {
         [
-            MenuOption(title: "Edit Automation") { onEdit() },
+            MenuOption(title: "编辑自动化") { onEdit() },
             .divider,
-            MenuOption(title: "Delete Automation", destructive: true) {
+            MenuOption(title: "删除自动化", destructive: true) {
                 confirmingDelete = true
             }
         ]
@@ -973,7 +974,7 @@ struct PlaylistEditorView: View {
     /// Short enough to stay on one line. "Every 15 min" wrapped and made that
     /// one segment taller than the bar around it.
     private static func shortLabel(_ minutes: Int) -> String {
-        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr"
+        minutes < 60 ? "\(minutes) 分钟" : "\(minutes / 60) 小时"
     }
 
     private var isNew: Bool {
@@ -996,7 +997,7 @@ struct PlaylistEditorView: View {
         guard !name.isEmpty else { return nil }
         let existing = store.playlists.map { (id: $0.id, name: $0.name) }
         return nameIsTaken(name, in: existing, excluding: editingID)
-            ? "Name already in use" : nil
+            ? "此名称已被使用" : nil
     }
 
     private var editingID: String? {
@@ -1016,23 +1017,23 @@ struct PlaylistEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SheetHeader(title: isNew ? "New Playlist" : "Edit Playlist") { dismiss() }
+            SheetHeader(title: isNew ? "新建播放列表" : "编辑播放列表") { dismiss() }
                 .padding(.horizontal, 26)
                 .padding(.top, 26)
             GlassTextField(
-                label: "NAME", placeholder: "Playlist name",
+                label: "名称", placeholder: "播放列表名称",
                 text: $name, problem: nameProblem
             )
             .padding(.horizontal, 26)
             .padding(.top, 20)
 
-            SectionLabel("CHANGE WALLPAPER EVERY")
+            SectionLabel("壁纸更换间隔")
                 .padding(.horizontal, 26)
                 .padding(.top, 22)
             HStack(spacing: 14) {
                 PillSegments(
                     options: Self.presets.map { PillOption("\($0)", Self.shortLabel($0)) }
-                        + [PillOption("custom", "Custom")],
+                        + [PillOption("custom", "自定义")],
                     selection: Binding(
                         get: { intervalIsCustom ? "custom" : "\(intervalMinutes)" },
                         set: { raw in
@@ -1080,9 +1081,9 @@ struct PlaylistEditorView: View {
             .padding(.top, 10)
 
             HStack(spacing: 10) {
-                SectionLabel("CHOOSE WALLPAPERS")
+                SectionLabel("选择壁纸")
                 Spacer()
-                Text("\(selected.count) selected")
+                Text("已选择 \(selected.count) 项")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
                 selectAllButton
@@ -1117,11 +1118,11 @@ struct PlaylistEditorView: View {
                     .foregroundStyle(Color.muroSecondary)
             } actions: {
                 if !isNew {
-                    DangerPill(title: "Delete") { confirmingDelete = true }
+                    DangerPill(title: "删除") { confirmingDelete = true }
                 }
-                GhostPill(title: "Cancel") { dismiss() }
+                GhostPill(title: "取消") { dismiss() }
                 PrimaryPill(
-                    title: isNew ? "Create Playlist" : "Save",
+                    title: isNew ? "创建播放列表" : "保存",
                     enabled: canSave,
                     returnKeyEnabled: !showCustomInterval
                 ) { save() }
@@ -1131,7 +1132,7 @@ struct PlaylistEditorView: View {
         .sheetSurface()
         .menuHost()
         .onAppear(perform: load)
-        .confirmScheduleDelete($confirmingDelete, kind: "playlist", name: trimmedName) {
+        .confirmScheduleDelete($confirmingDelete, kind: "播放列表", name: trimmedName) {
             if case .edit(let playlist) = target { store.deletePlaylist(playlist) }
             dismiss()
         }
@@ -1139,7 +1140,7 @@ struct PlaylistEditorView: View {
 
     private var summaryLine: String {
         let count = selected.count
-        return "\(count) wallpaper\(count == 1 ? "" : "s")  ·  \(intervalLabel(intervalMinutes).lowercased())  ·  shuffle \(shuffle ? "on" : "off")"
+        return "\(count) 张壁纸 · \(intervalLabel(intervalMinutes)) · 随机播放\(shuffle ? "开启" : "关闭")"
     }
 
     private var shuffleToggle: some View {
@@ -1150,7 +1151,7 @@ struct PlaylistEditorView: View {
                 Image(systemName: "shuffle")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(shuffle ? Color.muroAccent : Color.muroInk.opacity(0.6))
-                Text("Shuffle")
+                Text("随机播放")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk.opacity(shuffle ? 0.95 : 0.75))
                 MiniSwitch(on: shuffle)
@@ -1171,7 +1172,7 @@ struct PlaylistEditorView: View {
     private var selectAllButton: some View {
         let pickable = store.scheduleItems
         let allSelected = selected.count == pickable.count && !pickable.isEmpty
-        return Button(allSelected ? "Select None" : "Select All") {
+        return Button(allSelected ? "取消全选" : "全选") {
             selected = allSelected ? [] : Set(pickable.map(\.id))
         }
         .buttonStyle(.plain)
@@ -1191,7 +1192,7 @@ struct PlaylistEditorView: View {
             // "New Playlist 2", not a second "New Playlist". The warning below
             // is there for names typed by hand; a default that walks straight
             // into it would be the app's own fault.
-            name = uniqueName(base: "New Playlist", taken: store.playlists.map(\.name))
+            name = uniqueName(base: "新建播放列表", taken: store.playlists.map(\.name))
         case .edit(let playlist):
             name = playlist.name
             selected = Set(playlist.wallpaperIDs)
@@ -1202,8 +1203,8 @@ struct PlaylistEditorView: View {
 
     private func intervalLabel(_ minutes: Int) -> String {
         minutes < 60
-            ? "Every \(minutes) min"
-            : (minutes % 60 == 0 ? "Every \(minutes / 60) hr" : "Every \(minutes / 60) hr \(minutes % 60) min")
+            ? "每 \(minutes) 分钟"
+            : (minutes % 60 == 0 ? "每 \(minutes / 60) 小时" : "每 \(minutes / 60) 小时 \(minutes % 60) 分钟")
     }
 
     private func save() {
@@ -1245,12 +1246,12 @@ struct CustomIntervalPicker: View {
 
     var body: some View {
         CustomValueCard(
-            title: "Custom interval",
+            title: "自定义间隔",
             amount: $amount,
-            applyLabel: "Every \(resolved < 60 ? "\(resolved) min" : "\(resolved / 60) hr")"
+            applyLabel: "每 \(resolved < 60 ? "\(resolved) 分钟" : "\(resolved / 60) 小时")"
         ) {
             PillSegments(
-                options: [PillOption("1", "min"), PillOption("60", "hr")],
+                options: [PillOption("1", "分钟"), PillOption("60", "小时")],
                 selection: $unit,
                 height: 32,
                 labelSize: 12,
@@ -1281,11 +1282,11 @@ extension View {
         name: String,
         delete: @escaping () -> Void
     ) -> some View {
-        alert("Delete “\(name)”?", isPresented: isPresented) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive, action: delete)
+        alert("删除「\(name)」？", isPresented: isPresented) {
+            Button("取消", role: .cancel) {}
+            Button("删除", role: .destructive, action: delete)
         } message: {
-            Text("This \(kind) is deleted for good. Its wallpapers stay in your Library.")
+            Text("此\(kind)将被永久删除，其中的壁纸会保留在资源库中。")
         }
     }
 }

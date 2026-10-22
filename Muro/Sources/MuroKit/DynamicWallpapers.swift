@@ -335,7 +335,7 @@ public enum DynamicWallpapers {
               let table = (try? PropertyListSerialization.propertyList(from: data, format: nil))
                 as? [String: Any]
         else { return [:] }
-        for code in AppleAerials.preferredLanguageCodes() {
+        for code in ["zh_CN", "zh_Hans", "zh"] + AppleAerials.preferredLanguageCodes() {
             if let strings = table[code] as? [String: String] { return strings }
         }
         return [:]

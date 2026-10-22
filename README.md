@@ -55,7 +55,7 @@ wallpaper and every feature is unlocked.
 - ⏱️ **Automations.** Give every wallpaper its own time. Ten seconds each, or a full day schedule where each wallpaper has its own hours.
 - ⏸️ **Pause after a set time.** Let a wallpaper play for a while after it changes or after you unlock, then hold still. Set it in seconds, minutes or hours, for everything or for one wallpaper, and turn on Replay on Clear Desktop to get that time again whenever your desktop is clear.
 - 🗑️ **Delete what you do not want.** Remove wallpapers one at a time or several at once, imported videos included.
-- 📥 **Import your own.** Drop in any video and it gets transcoded once to HEVC and added to your library. Screen savers too: add `.saver` files like XScreenSaver and set them from Muro.
+- 📥 **Import your own.** Drop in images (JPEG, PNG, HEIC and other macOS-supported image formats) or MP4/MOV/M4V videos. Images keep their original file and can be applied as static desktop wallpapers; multi-frame images use their first frame. Videos get transcoded once to HEVC. Screen savers too: add `.saver` files like XScreenSaver and set them from Muro.
 - 🎛️ **Menu bar controls.** Play, pause, skip and switch wallpapers without opening the app.
 - ✨ **Tells you when there is a new Muro.** What's New shows what changed in the release and downloads it for you.
 - 💾 **Space control.** See what each wallpaper costs on disk, remove downloads you're done with, or keep them all on another drive.
@@ -231,6 +231,24 @@ Library tab whenever you want the space back.
 ---
 
 ## Build from source
+
+### 中文界面构建
+
+此工作副本的应用界面使用简体中文，壁纸分类保留原始标识，仅转换显示名称。
+自定义视频名称、第三方壁纸标题及远程发布说明保留原文。
+
+使用已选定的 Xcode 工具链构建 Swift/macOS 项目，通过 mise 执行：
+
+```bash
+mise install
+mise run test
+mise run install
+```
+
+应用安装到 `/Applications/Muro.app`，构建产物位于 `Muro/dist/Muro.app`。
+构建时优先使用本地默认壁纸；缺失时从 Muro 官方 CDN 下载并缓存到 `.build`。
+使用 macOS 26 之前的 SDK 构建时，使用兼容材质与预编译图标，
+且不打包仅 macOS 26 支持的锁屏扩展。使用 macOS 26 或更新的 SDK 则构建完整扩展。
 
 ```bash
 git clone https://github.com/MrRockySL/Muro.git

@@ -4,7 +4,7 @@ import AppKit
 public enum ThumbnailError: Error, CustomStringConvertible {
     case encodeFailed
 
-    public var description: String { "could not encode thumbnail JPEG" }
+    public var description: String { "无法生成 JPEG 缩略图" }
 }
 
 /// Extracts one frame and writes it as a JPEG, used for library cards and

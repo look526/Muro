@@ -42,20 +42,20 @@ final class DownloadFolderController: ObservableObject {
     var isCustom: Bool { location != .builtIn }
 
     var subtitle: String {
-        if cancelling { return "Cancelling…" }
+        if cancelling { return "正在取消…" }
         if let moving {
             let percent = movedFraction.map { " \(Int(($0 * 100).rounded()))%" } ?? ""
             return moving.total == 0
-                ? "Moving your wallpapers…\(percent)"
-                : "Moving \(min(moving.done + 1, moving.total)) of \(moving.total) wallpapers…\(percent)"
+                ? "正在移动壁纸…\(percent)"
+                : "正在移动第 \(min(moving.done + 1, moving.total))/\(moving.total) 张壁纸…\(percent)"
         }
         switch location {
         case .builtIn:
-            return "On this Mac, in Muro's own folder"
+            return "本机 Muro 默认文件夹"
         case .custom(let url):
             return Self.displayPath(url)
         case .unavailable(let url):
-            return "\(DownloadFolder.placeName(url)) is not connected"
+            return "\(DownloadFolder.placeName(url)) 未连接"
         }
     }
 
@@ -71,8 +71,8 @@ final class DownloadFolderController: ObservableObject {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Move Here"
-        panel.message = "Muro moves your downloaded wallpapers into a folder called \(DownloadFolder.folderName) here. New downloads go there too."
+        panel.prompt = "移到此处"
+        panel.message = "Muro 会将已下载的壁纸移到此处的「\(DownloadFolder.folderName)」文件夹，以后的下载也将保存在这里。"
         if case .custom(let url) = location {
             panel.directoryURL = url.deletingLastPathComponent()
         }
@@ -164,7 +164,7 @@ final class DownloadFolderController: ObservableObject {
         }
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.pathComponents
         if parts.starts(with: home) {
-            return (["Home"] + parts.dropFirst(home.count)).joined(separator: " › ")
+            return (["个人文件夹"] + parts.dropFirst(home.count)).joined(separator: " › ")
         }
         let disk = (try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeLocalizedNameKey]))?
             .volumeLocalizedName ?? "Mac"

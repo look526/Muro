@@ -50,9 +50,9 @@ public enum ApplePictures {
 
         public var errorDescription: String? {
             switch self {
-            case .unzipFailed: return "The picture from Apple could not be opened."
-            case .noPicture: return "Apple's download held no picture."
-            case .cutFailed: return "The light and dark pictures could not be made."
+            case .unzipFailed: return "无法打开从 Apple 下载的图片。"
+            case .noPicture: return "Apple 下载内容中没有图片。"
+            case .cutFailed: return "无法生成浅色和深色图片。"
             }
         }
     }

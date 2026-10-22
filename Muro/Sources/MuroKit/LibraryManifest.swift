@@ -1,5 +1,9 @@
 import Foundation
 
+public enum WallpaperMediaType: String, Codable {
+    case video, image
+}
+
 /// One wallpaper in the Muro library. Paths are relative to the library root
 /// so the whole library folder can be moved without breaking the manifest.
 public struct WallpaperEntry: Codable, Identifiable, Equatable {
@@ -24,6 +28,9 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
     /// came from, so importing the same file again can be recognised. Nil for
     /// downloads and for imports made before it was kept.
     public var sourceFingerprint: String?
+    /// Absent in older libraries, whose entries are all videos.
+    public var mediaType: WallpaperMediaType?
+    public var isImage: Bool { mediaType == .image }
 
     public init(
         id: String, title: String, category: String, file: String,
@@ -32,7 +39,8 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
         height: Int, fps: Double, duration: Double, sizeBytes: Int64,
         liked: Bool = false, dateAdded: Date = Date(),
         pauseAfterSeconds: Int? = nil,
-        sourceFingerprint: String? = nil
+        sourceFingerprint: String? = nil,
+        mediaType: WallpaperMediaType? = nil
     ) {
         self.id = id
         self.title = title
@@ -50,6 +58,7 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
         self.dateAdded = dateAdded
         self.pauseAfterSeconds = pauseAfterSeconds
         self.sourceFingerprint = sourceFingerprint
+        self.mediaType = mediaType
     }
 
     /// Every file this wallpaper owns inside the library root. Deleting a

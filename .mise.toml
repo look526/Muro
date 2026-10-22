@@ -1,0 +1,14 @@
+[tasks.build]
+description = "Build the Muro application bundle with the selected Xcode toolchain"
+dir = "Muro"
+run = "./build-app.sh"
+
+[tasks.install]
+description = "Build and install Muro in /Applications"
+dir = "Muro"
+run = "./build-app.sh --install"
+
+[tasks.test]
+description = "Run MuroKit tests with the selected Xcode toolchain"
+dir = "Muro"
+run = "swift test"

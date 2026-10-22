@@ -49,7 +49,8 @@ struct ExploreView: View {
             if fps != "All", "\(standardFrameRate(item.fps))" != fps { return false }
             if !store.searchText.isEmpty,
                !item.title.localizedCaseInsensitiveContains(store.searchText),
-               !item.category.localizedCaseInsensitiveContains(store.searchText) {
+               !item.category.localizedCaseInsensitiveContains(store.searchText),
+               !item.categoryTitle.localizedCaseInsensitiveContains(store.searchText) {
                 return false
             }
             return true
@@ -118,7 +119,7 @@ struct ExploreView: View {
     // MARK: - Categories
 
     private var categoryOptions: [PillOption] {
-        [PillOption("All", "All")] + store.categories.map { PillOption($0, $0) }
+        [PillOption("All", "全部")] + store.categories.map { PillOption($0, ChineseUI.name($0)) }
     }
 
     private var categorySegments: some View {
@@ -177,13 +178,13 @@ struct ExploreView: View {
             Spacer(minLength: 12)
             if narrowed { clearFilters }
             FilterDropdown(
-                title: "Resolution",
+                title: "分辨率",
                 value: resolution,
                 width: 190,
                 options: { pickOptions(all: resolutionOptions, selection: resolution) { resolution = $0 } }
             )
             FilterDropdown(
-                title: "FPS",
+                title: "帧率",
                 value: fps,
                 width: 160,
                 options: { pickOptions(all: fpsOptions, selection: fps) { fps = $0 } }
@@ -195,9 +196,9 @@ struct ExploreView: View {
 
     private var countLine: String {
         let count = filtered.count
-        let noun = count == 1 ? "wallpaper" : "wallpapers"
-        if category == "All" { return "\(count) \(noun)" }
-        return "\(count) \(noun) in \(category)"
+        let noun = count == 1 ? "壁纸" : "壁纸"
+        if category == "All" { return "\(count) 张壁纸" }
+        return "\(ChineseUI.name(category)) · \(count) 张壁纸"
     }
 
     private var clearFilters: some View {
@@ -208,7 +209,7 @@ struct ExploreView: View {
             HStack(spacing: 6) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9.5, weight: .semibold))
-                Text("Clear filters")
+                Text("清除筛选")
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundStyle(Color.muroAccent)
@@ -225,7 +226,7 @@ struct ExploreView: View {
         all: [String], selection: String, choose: @escaping (String) -> Void
     ) -> [MenuOption] {
         (["All"] + all).map { value in
-            MenuOption(title: value, checked: selection == value) { choose(value) }
+            MenuOption(title: ChineseUI.name(value), checked: selection == value) { choose(value) }
         }
     }
 
@@ -271,7 +272,7 @@ struct ExploreView: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(Color.muroAccent)
-            Text("Loading wallpapers…")
+            Text("正在加载壁纸…")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
         }
@@ -301,12 +302,12 @@ struct ExploreView: View {
     private var noMatchesState: some View {
         VStack(spacing: 12) {
             emptyIcon("sparkle.magnifyingglass")
-            Text("Nothing matches that")
+            Text("没有匹配的内容")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
             Text(store.searchText.isEmpty
-                 ? "Try another category, or widen the resolution and frame rate."
-                 : "No wallpaper called \(store.searchText). Try another word.")
+                 ? "请尝试其他分类，或放宽分辨率和帧率筛选条件。"
+                 : "没有找到「\(store.searchText)」，请尝试其他关键词。")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -330,7 +331,7 @@ struct ExploreView: View {
                     Text(problem.title)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Color.muroInk)
-                    Text("Only the wallpapers you have already downloaded are showing.")
+                    Text("当前仅显示已下载的壁纸。")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Color.muroSecondary)
                 }
@@ -364,7 +365,7 @@ struct ExploreView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                 }
-                Text(store.catalogRefreshing ? "Checking…" : "Try Again")
+                Text(store.catalogRefreshing ? "正在检查…" : "重试")
                     .font(.system(size: 12.5, weight: .semibold))
             }
             .foregroundStyle(Color.muroAccent)
@@ -418,7 +419,7 @@ struct FilterDropdown: View {
                 Text(title)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
-                Text(value)
+                Text(ChineseUI.name(value))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(set ? Color.muroAccent : Color.muroInk)
                 Image(systemName: "chevron.down")

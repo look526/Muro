@@ -55,6 +55,8 @@ cp "$BIN_PATH/muro-saver-picture" "$APP/Contents/MacOS/muro-saver-picture"
 # ExtensionFoundation installs the correct entry point and actor isolation.
 # The private wallpaper framework is loaded only at runtime.
 EXT="$APP/Contents/Extensions/MuroWallpaperExtension.appex"
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+if (( ${SDK_VERSION%%.*} >= 26 )); then
 echo "==> building macOS 26+ wallpaper extension"
 EXT_DERIVED="$DIR/.build/muro-wallpaper-extension"
 xcodebuild \
@@ -68,6 +70,9 @@ xcodebuild \
     build
 mkdir -p "$APP/Contents/Extensions"
 cp -R "$EXT_DERIVED/Build/Products/Release/MuroWallpaperExtension.appex" "$EXT"
+else
+    echo "==> SDK $SDK_VERSION: desktop-only build (lock screen requires macOS 26 SDK)"
+fi
 
 # App icon: the Glass Moon (owner, 2026-10-03), an Icon Composer file with a
 # light picture and, for the dark icon, the art alone on macOS's own dark tile
@@ -82,6 +87,7 @@ echo "==> compiling the app icon"
 ICON_OUT="$DIR/.build/app-icon"
 rm -rf "$ICON_OUT"
 mkdir -p "$ICON_OUT"
+if (( ${SDK_VERSION%%.*} >= 26 )); then
 xcrun actool --compile "$ICON_OUT" --platform macosx --minimum-deployment-target 14.0 \
     --app-icon MuroIcon --output-partial-info-plist "$ICON_OUT/partial.plist" \
     --target-device mac "$DIR/Icon/MuroIcon.icon" > /dev/null
@@ -92,6 +98,9 @@ if ! xcrun assetutil --info "$ICON_OUT/Assets.car" | grep -q NSAppearanceNameDar
     exit 1
 fi
 cp "$ICON_OUT/Assets.car" "$ICON_OUT/MuroIcon.icns" "$APP/Contents/Resources/"
+else
+    cp "$DIR/Icon/AppIcon.icns" "$APP/Contents/Resources/MuroIcon.icns"
+fi
 cp "$DIR/Icon/InApp/MuroIcon-Default.png" "$DIR/Icon/InApp/MuroIcon-Light.png" \
     "$DIR/Icon/InApp/MuroIcon-Dark.png" "$APP/Contents/Resources/"
 cp "$DIR/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
@@ -110,10 +119,24 @@ if [[ -f "$MURO_LIB/Masters/$BUNDLED_ID.mov" && -f "$MURO_LIB/Thumbnails/$BUNDLE
     cp "$MURO_LIB/Masters/$BUNDLED_ID.mov"    "$APP/Contents/Resources/BundledWallpaper.mov"
     cp "$MURO_LIB/Thumbnails/$BUNDLED_ID.jpg" "$APP/Contents/Resources/BundledWallpaper.jpg"
 else
-    echo "ERROR: bundled wallpaper $BUNDLED_ID not found in $MURO_LIB" >&2
-    echo "       (Snowfall in Forest must be in the local library — a DMG without" >&2
-    echo "       it ships a blank hero on fresh installs)" >&2
-    exit 1
+    BUNDLED_CACHE="$DIR/.build/bundled-wallpaper"
+    mkdir -p "$BUNDLED_CACHE"
+    for kind in video thumbnail; do
+        if [[ "$kind" == video ]]; then
+            RESOURCE="masters/$BUNDLED_ID.mov"
+            NAME="BundledWallpaper.mov"
+        else
+            RESOURCE="thumbs/$BUNDLED_ID.jpg"
+            NAME="BundledWallpaper.jpg"
+        fi
+        if [[ ! -s "$BUNDLED_CACHE/$NAME" ]]; then
+            echo "==> downloading bundled wallpaper $kind"
+            curl --fail --location --retry 3 \
+                "https://cdn.murowallpaper.com/$RESOURCE" -o "$BUNDLED_CACHE/$NAME.part"
+            mv "$BUNDLED_CACHE/$NAME.part" "$BUNDLED_CACHE/$NAME"
+        fi
+        cp "$BUNDLED_CACHE/$NAME" "$APP/Contents/Resources/$NAME"
+    done
 fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -123,6 +146,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key>            <string>Muro</string>
     <key>CFBundleDisplayName</key>     <string>Muro</string>
+    <key>CFBundleDevelopmentRegion</key> <string>zh_CN</string>
+    <key>CFBundleLocalizations</key> <array><string>zh-Hans</string></array>
     <key>CFBundleExecutable</key>      <string>Muro</string>
     <key>CFBundleIconFile</key>        <string>MuroIcon</string>
     <key>CFBundleIconName</key>        <string>MuroIcon</string>
@@ -138,9 +163,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+mkdir -p "$APP/Contents/Resources/zh-Hans.lproj"
+cp "$DIR/Localization/zh-Hans/InfoPlist.strings" "$APP/Contents/Resources/zh-Hans.lproj/"
 
 # A mismatched app and appex is the kind of thing nobody notices until an
 # install refuses to load the extension, so check it here rather than hope.
+if [[ -d "$EXT" ]]; then
 EXT_VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$EXT/Contents/Info.plist")
 EXT_BUILD=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$EXT/Contents/Info.plist")
 if [[ "$EXT_VERSION" != "$VERSION" || "$EXT_BUILD" != "$BUILD" ]]; then
@@ -148,11 +176,14 @@ if [[ "$EXT_VERSION" != "$VERSION" || "$EXT_BUILD" != "$BUILD" ]]; then
     exit 1
 fi
 echo "==> version $VERSION ($BUILD), app and extension agree"
+fi
 
 echo "==> ad-hoc codesign"
+if [[ -d "$EXT" ]]; then
 codesign --force --sign - \
     --entitlements "$DIR/Sources/MuroWallpaperExtension/MuroWallpaperExtension.entitlements" \
     "$EXT"
+fi
 codesign --force --sign - "$APP/Contents/MacOS/muro-saver-picture"
 codesign --force --sign - "$APP"
 

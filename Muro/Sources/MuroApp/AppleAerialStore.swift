@@ -62,7 +62,8 @@ final class AppleAerialModel: ObservableObject {
     func screenSavers(matching search: String) -> [AppleAerial] {
         (aerials ?? []).filter { saver in
             saver.category == AppleScreenSaverVideos.category
-                && (search.isEmpty || saver.name.localizedCaseInsensitiveContains(search))
+                && (search.isEmpty || saver.name.localizedCaseInsensitiveContains(search)
+                    || ChineseUI.name(saver.name).localizedCaseInsensitiveContains(search))
         }
     }
 
@@ -80,7 +81,9 @@ final class AppleAerialModel: ObservableObject {
             if category != "All", aerial.category != category { return false }
             if !search.isEmpty,
                !aerial.name.localizedCaseInsensitiveContains(search),
-               !aerial.category.localizedCaseInsensitiveContains(search) {
+               !aerial.category.localizedCaseInsensitiveContains(search),
+               !ChineseUI.name(aerial.name).localizedCaseInsensitiveContains(search),
+               !ChineseUI.name(aerial.category).localizedCaseInsensitiveContains(search) {
                 return false
             }
             return true
@@ -329,7 +332,7 @@ extension AppStore {
                 await MainActor.run {
                     AppStore.shared.downloads[id] = nil
                     AppStore.shared.applyError =
-                        "That aerial could not be downloaded from Apple. \(error.localizedDescription)"
+                        "无法从 Apple 下载此航拍壁纸。\(error.localizedDescription)"
                 }
             }
         }
@@ -361,7 +364,7 @@ extension AppStore {
                 try FileManager.default.copyItem(at: url, to: target)
                 added.append(name)
             } catch {
-                importError = "\(url.lastPathComponent) could not be added. \(error.localizedDescription)"
+                importError = "无法添加「\(url.lastPathComponent)」。\(error.localizedDescription)"
             }
         }
         if !added.isEmpty { refreshImportedScreenSavers() }
@@ -413,7 +416,7 @@ extension AppStore {
                 }
                 gone.insert(id)
             } catch {
-                applyError = "\(saver.name) could not be deleted. \(error.localizedDescription)"
+                applyError = "无法删除「\(saver.name)」。\(error.localizedDescription)"
             }
         }
         if recentIDs.contains(where: { gone.contains($0) }) {

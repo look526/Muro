@@ -50,7 +50,7 @@ final class VideoRenderer: @unchecked Sendable {
         semaphore.wait()
         guard let track = loadedTrack else {
             throw loadError ?? CocoaError(.fileReadCorruptFile, userInfo: [
-                NSLocalizedDescriptionKey: "No video track in \(videoURL.lastPathComponent)",
+                NSLocalizedDescriptionKey: "「\(videoURL.lastPathComponent)」不包含视频轨道",
             ])
         }
 

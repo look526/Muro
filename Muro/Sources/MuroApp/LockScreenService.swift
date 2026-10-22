@@ -13,21 +13,21 @@ enum LockScreenServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .requiresTahoe:
-            return "Lock-screen live wallpapers require macOS 26 or later."
+            return "锁屏动态壁纸需要 macOS 26 或更新版本。"
         case .extensionMissing:
-            return "Muro’s lock-screen extension is missing. Reinstall this build of Muro."
+            return "Muro 锁屏扩展缺失，请重新安装此版本。"
         case .extensionNotRegistered:
             return """
-            macOS would not load Muro’s lock-screen extension. \
-            Move Muro to your Applications folder, open it once from there, and try again.
+            macOS 无法加载 Muro 锁屏扩展。\
+            请将 Muro 移到「应用程序」文件夹，从那里打开后重试。
             """
         case .translocated:
             return """
-            macOS is running Muro from a temporary copy, so the lock screen cannot be set. \
-            Drag Muro into your Applications folder, then open it from there.
+            macOS 正从临时副本运行 Muro，无法设置锁屏。\
+            请将 Muro 拖入「应用程序」文件夹后再打开。
             """
         case .wallpaperStoreMissing:
-            return "The macOS wallpaper store could not be found."
+            return "找不到 macOS 壁纸配置。"
         case .operationFailed(let message):
             return message
         }

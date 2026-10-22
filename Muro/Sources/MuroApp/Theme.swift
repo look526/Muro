@@ -25,9 +25,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .standard: return "Default"
-        case .dark: return "Dark"
-        case .light: return "Light"
+        case .standard: return "默认"
+        case .dark: return "深色"
+        case .light: return "浅色"
         }
     }
 }
@@ -282,8 +282,9 @@ struct LiquidGlass: ViewModifier {
     var tint: Double = 0
     var stroke: Double = 0.14
 
-    func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             content
                 .glassEffect(tint > 0 ? .regular.tint(Color.muroShade.opacity(tint)) : .regular, in: shape)
@@ -294,6 +295,12 @@ struct LiquidGlass: ViewModifier {
                 .background(.ultraThinMaterial, in: shape)
                 .overlay(shape.strokeBorder(Color.muroInk.opacity(stroke), lineWidth: 1))
         }
+#else
+        content
+            .background(shape.fill(Color.muroShade.opacity(tint)))
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.strokeBorder(Color.muroInk.opacity(stroke), lineWidth: 1))
+#endif
     }
 }
 

@@ -87,8 +87,8 @@ struct AppleGalleryView: View {
         ZStack {
             PillSegments(
                 options: [
-                    PillOption(Kind.aerials.rawValue, "Aerials", count: model.aerialCount),
-                    PillOption(Kind.screenSavers.rawValue, "Screen Savers",
+                    PillOption(Kind.aerials.rawValue, "航拍", count: model.aerialCount),
+                    PillOption(Kind.screenSavers.rawValue, "屏幕保护程序",
                                count: model.aerials == nil ? nil : model.screenSavers(matching: "").count)
                 ],
                 selection: Binding(
@@ -141,7 +141,7 @@ struct AppleGalleryView: View {
     }
 
     private var categoryOptions: [PillOption] {
-        [PillOption("All", "All")] + model.categories.map { PillOption($0, $0) }
+        [PillOption("All", "全部")] + model.categories.map { PillOption($0, ChineseUI.name($0)) }
     }
 
     /// The Library's small switch, at the same size, so the page reads as two
@@ -192,9 +192,9 @@ struct AppleGalleryView: View {
 
     private var countLine: String {
         let count = shown.count
-        let noun = count == 1 ? "wallpaper" : "wallpapers"
-        if category == "All" { return "\(count) \(noun) from Apple" }
-        return "\(count) \(noun) in \(category)"
+        let noun = count == 1 ? "壁纸" : "壁纸"
+        if category == "All" { return "\(count) 张 Apple 壁纸" }
+        return "\(ChineseUI.name(category)) · \(count) 张壁纸"
     }
 
     /// Videos ready to play, and still pictures downloaded, on this page.
@@ -209,7 +209,7 @@ struct AppleGalleryView: View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 10.5, weight: .semibold))
-            Text("\(downloadedCount) on this Mac")
+            Text("本机已下载 \(downloadedCount) 项")
                 .font(.system(size: 12, weight: .semibold))
         }
         .foregroundStyle(Color.muroAccent)
@@ -250,7 +250,7 @@ struct AppleGalleryView: View {
                     // page with the tab still saying 8 (full check,
                     // 2026-10-01). It answers the way the aerials do.
                     if savers.isEmpty {
-                        if model.loaded { noMatchesState(noun: "screen saver") } else { loadingState }
+                        if model.loaded { noMatchesState(noun: "屏幕保护程序") } else { loadingState }
                     } else {
                         saverGrid(savers)
                     }
@@ -286,7 +286,7 @@ struct AppleGalleryView: View {
         } else if model.aerials == nil {
             noStoreState
         } else {
-            noMatchesState(noun: "aerial")
+            noMatchesState(noun: "航拍壁纸")
         }
     }
 
@@ -295,7 +295,7 @@ struct AppleGalleryView: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(Color.muroAccent)
-            Text("Reading Apple's wallpapers…")
+            Text("正在读取 Apple 壁纸…")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
         }
@@ -306,11 +306,11 @@ struct AppleGalleryView: View {
     private var noStoreState: some View {
         VStack(spacing: 12) {
             emptyIcon("macwindow.badge.plus")
-            Text("Apple's wallpapers are not on this Mac yet")
+            Text("本机尚无 Apple 壁纸列表")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
-            Text("Open System Settings and look at Wallpaper once. macOS writes "
-                 + "its list of aerials then, and Muro reads the same list.")
+            Text("打开「系统设置」中的「墙纸」页面。"
+                 + "macOS 会生成航拍列表，Muro 随后即可读取。")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -319,7 +319,7 @@ struct AppleGalleryView: View {
             Button {
                 model.load()
             } label: {
-                Text("Look Again")
+                Text("重新读取")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroAccent)
                     .padding(.horizontal, 18)
@@ -337,12 +337,12 @@ struct AppleGalleryView: View {
     private func noMatchesState(noun: String) -> some View {
         VStack(spacing: 12) {
             emptyIcon("sparkle.magnifyingglass")
-            Text("Nothing matches that")
+            Text("没有匹配的内容")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
             Text(store.searchText.isEmpty
-                 ? "Try another category."
-                 : "No \(noun) called \(store.searchText). Try another word.")
+                 ? "请尝试其他分类。"
+                 : "没有找到「\(store.searchText)」相关的\(noun)，请尝试其他关键词。")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)

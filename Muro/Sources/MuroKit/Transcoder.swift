@@ -16,9 +16,9 @@ public enum TranscodeError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .noVideoTrack: return "source has no video track"
-        case .readerFailed(let why): return "reader failed: \(why)"
-        case .writerFailed(let why): return "writer failed: \(why)"
+        case .noVideoTrack: return "源文件不包含视频轨道"
+        case .readerFailed(let why): return "读取失败：\(why)"
+        case .writerFailed(let why): return "写入失败：\(why)"
         }
     }
 }

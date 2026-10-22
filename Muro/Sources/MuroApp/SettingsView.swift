@@ -44,9 +44,9 @@ struct SettingsView: View {
                     .padding(.top, 30)
                     .id("settings-top")
 
-                section("GENERAL") {
-                    row(icon: .launchAtLogin, title: "Launch at Login",
-                        subtitle: "Starts quietly in the background") {
+                section("通用") {
+                    row(icon: .launchAtLogin, title: "登录时启动",
+                        subtitle: "登录后在后台启动") {
                         Toggle("", isOn: $launchAtLogin)
                             .toggleStyle(.switch)
                             .tint(Color.muroSwitch)
@@ -56,7 +56,7 @@ struct SettingsView: View {
                             }
                     }
                     divider
-                    row(icon: .menuBar, title: "Show Menu Bar Icon",
+                    row(icon: .menuBar, title: "显示菜单栏图标",
                         subtitle: menuBarSubtitle) {
                         Toggle("", isOn: $showMenuBarIcon)
                             .toggleStyle(.switch)
@@ -64,8 +64,8 @@ struct SettingsView: View {
                             .labelsHidden()
                     }
                     divider
-                    row(icon: .dockIcon, title: "Show Dock Icon",
-                        subtitle: "Off keeps Muro in the menu bar only") {
+                    row(icon: .dockIcon, title: "显示程序坞图标",
+                        subtitle: "关闭后仅在菜单栏中显示 Muro") {
                         Toggle("", isOn: $showDockIcon)
                             .toggleStyle(.switch)
                             .tint(Color.muroSwitch)
@@ -80,8 +80,8 @@ struct SettingsView: View {
                     // same glass in black and white; Light is white with dark
                     // buttons (owner, 2026-10-02). It changes at once, in
                     // every window and the menu bar.
-                    row(icon: .appearance, title: "Appearance",
-                        subtitle: "Default, Light or Dark") {
+                    row(icon: .appearance, title: "外观",
+                        subtitle: "默认、浅色或深色") {
                         CapsuleSegments(
                             options: [AppearanceMode.standard, .light, .dark].map { ($0.title, $0.rawValue) },
                             selection: Binding(
@@ -95,8 +95,8 @@ struct SettingsView: View {
                     // the owner picked from ten drawn in Figma. The menu shows
                     // each glyph beside its name, and the menu bar changes the
                     // moment one is chosen (StatusBarController).
-                    row(icon: .menuBarIcon, title: "Menu Bar Icon",
-                        subtitle: "The icon Muro shows in the menu bar") {
+                    row(icon: .menuBarIcon, title: "菜单栏图标",
+                        subtitle: "选择 Muro 的菜单栏图标") {
                         GlassDropdown(width: 170, align: .trailing, options: {
                             MenuBarIconStyle.allCases.map { style in
                                 MenuOption(
@@ -126,9 +126,9 @@ struct SettingsView: View {
                     }
                 }
 
-                section("PLAYBACK") {
-                    row(icon: .playbackSpeed, title: "Playback Speed",
-                        subtitle: "How fast wallpapers play") {
+                section("播放") {
+                    row(icon: .playbackSpeed, title: "播放速度",
+                        subtitle: "调整壁纸播放速度") {
                         GlassDropdown(width: 120, align: .trailing, options: {
                             [0.5, 0.75, 1.0, 1.25, 1.5].map { speed in
                                 MenuOption(
@@ -151,27 +151,27 @@ struct SettingsView: View {
                         }
                     }
                     divider
-                    row(icon: .defaultQuality, title: "Default Quality",
-                        subtitle: "Efficient caps at 30 fps for lower CPU") {
+                    row(icon: .defaultQuality, title: "默认画质",
+                        subtitle: "节能模式限制为 30 帧，降低 CPU 占用") {
                         CapsuleSegments(
-                            options: [("Smooth", "smooth"), ("Efficient", "efficient")],
+                            options: [("流畅", "smooth"), ("节能", "efficient")],
                             selection: $defaultMode
                         )
                     }
                     divider
-                    row(icon: .pauseAfter, title: "Pause After",
+                    row(icon: .pauseAfter, title: "定时暂停",
                         subtitle: pauseAfterSubtitle) {
                         GlassDropdown(width: 150, align: .trailing, options: {
                             SettingsView.pauseAfterChoices.map { seconds in
                                 MenuOption(
-                                    title: seconds == 0 ? "Off" : durationLabel(seconds),
+                                    title: seconds == 0 ? "关闭" : durationLabel(seconds),
                                     checked: store.pauseAfterSeconds == seconds
                                 ) { store.setPauseAfter(seconds) }
-                            } + [.divider, MenuOption(title: "Custom") { customPauseAfter = true }]
+                            } + [.divider, MenuOption(title: "自定义") { customPauseAfter = true }]
                         }) {
                             HStack(spacing: 6) {
                                 Text(store.pauseAfterSeconds == 0
-                                     ? "Off" : durationLabel(store.pauseAfterSeconds))
+                                     ? "关闭" : durationLabel(store.pauseAfterSeconds))
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(Color.muroInk)
                                 Image(systemName: "chevron.down")
@@ -195,7 +195,7 @@ struct SettingsView: View {
                     // from Pause After stands where its icon would be. A box
                     // around the pair was tried first: it pushed both rows in,
                     // out of line with every other icon and control.
-                    subRow(title: "Replay on Clear Desktop", subtitle: replaySubtitle) {
+                    subRow(title: "桌面空闲时重新播放", subtitle: replaySubtitle) {
                         Toggle("", isOn: Binding(
                             get: { store.replayOnClearDesktop },
                             set: { store.setReplayOnClearDesktop($0) }
@@ -209,7 +209,7 @@ struct SettingsView: View {
                     // the same key Apple's own panel writes, and loginwindow
                     // picks it up at its next idle check with nothing to
                     // restart. See MuroKit/ScreenSaverDelay.swift.
-                    row(icon: .screenSaver, title: "Start Screen Saver",
+                    row(icon: .screenSaver, title: "启动屏幕保护程序",
                         subtitle: screenSaverSubtitle) {
                         GlassDropdown(width: 150, align: .trailing, options: {
                             ScreenSaverDelay.choices.map { seconds in
@@ -237,9 +237,9 @@ struct SettingsView: View {
                     }
                 }
 
-                section("ENERGY") {
-                    row(icon: .lowPower, title: "Auto-pause in Low Power Mode",
-                        subtitle: "Freeze while saving energy") {
+                section("节能") {
+                    row(icon: .lowPower, title: "低电量模式下自动暂停",
+                        subtitle: "节能时保持静止画面") {
                         Toggle("", isOn: Binding(
                             get: { store.autoPauseLowPower },
                             set: { store.setAutoPauseLowPower($0) }
@@ -247,8 +247,8 @@ struct SettingsView: View {
                         .toggleStyle(.switch).tint(Color.muroSwitch).labelsHidden()
                     }
                     divider
-                    row(icon: .lowBattery, title: "Auto-pause below 20% battery",
-                        subtitle: "Resumes automatically on power") {
+                    row(icon: .lowBattery, title: "电量低于 20% 时自动暂停",
+                        subtitle: "接通电源后自动恢复") {
                         Toggle("", isOn: Binding(
                             get: { store.autoPauseBattery },
                             set: { store.setAutoPauseBattery($0) }
@@ -256,8 +256,8 @@ struct SettingsView: View {
                         .toggleStyle(.switch).tint(Color.muroSwitch).labelsHidden()
                     }
                     divider
-                    row(icon: .covered, title: "Auto-pause when covered",
-                        subtitle: "Freeze when a window or full screen app covers it") {
+                    row(icon: .covered, title: "壁纸被遮挡时自动暂停",
+                        subtitle: "被窗口或全屏应用遮挡时保持静止") {
                         Toggle("", isOn: Binding(
                             get: { store.autoPauseFullScreen },
                             set: { store.setAutoPauseFullScreen($0) }
@@ -267,8 +267,8 @@ struct SettingsView: View {
                     divider
                     // Issue #22. Any app window open on a screen freezes that
                     // screen's wallpaper, and a clear desktop plays it.
-                    row(icon: .desktopOnly, title: "Play only on desktop",
-                        subtitle: "Freeze while a window is open on that screen") {
+                    row(icon: .desktopOnly, title: "仅在桌面可见时播放",
+                        subtitle: "显示器上有窗口时保持静止") {
                         Toggle("", isOn: Binding(
                             get: { store.playOnlyOnDesktop },
                             set: { store.setPlayOnlyOnDesktop($0) }
@@ -277,12 +277,12 @@ struct SettingsView: View {
                     }
                 }
 
-                section("DISPLAYS") {
+                section("显示器") {
                     ForEach(Array(store.displays.enumerated()), id: \.element.id) { index, display in
                         if index > 0 { divider }
                         row(icon: display.isBuiltIn ? .builtInDisplay : .externalDisplay,
                             title: display.displayName,
-                            subtitle: "\(display.kindLabel) display") {
+                            subtitle: "\(display.kindLabel)显示器") {
                             Text("\(display.pixelsW) × \(display.pixelsH)")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Color.muroSecondary)
@@ -290,14 +290,14 @@ struct SettingsView: View {
                     }
                 }
 
-                section("STORAGE") {
-                    row(icon: .storage, title: "Library & Cache",
-                        subtitle: store.clearStatus ?? "Keeps the wallpaper in use") {
+                section("存储") {
+                    row(icon: .storage, title: "资源库与缓存",
+                        subtitle: store.clearStatus ?? "保留正在使用的壁纸") {
                         HStack(spacing: 10) {
                             Text(formatSize(store.libraryBytes))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Color.muroSecondary)
-                            Button("Clear") { confirmClear = true }
+                            Button("清理") { confirmClear = true }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Color.muroInk)
@@ -308,27 +308,27 @@ struct SettingsView: View {
                     }
                     // The share of it that came from the Apple section, which
                     // can be most of it: one aerial alone can be 1.5 GB.
-                    subRow(title: "Apple Downloads",
-                           subtitle: "Aerials and pictures from the Apple section") {
+                    subRow(title: "Apple 下载内容",
+                           subtitle: "Apple 专区的航拍壁纸和图片") {
                         Text(formatSize(store.appleDownloadBytes))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.muroSecondary)
                     }
                     divider
-                    row(icon: .downloadFolder, title: "Download Folder",
+                    row(icon: .downloadFolder, title: "下载文件夹",
                         subtitle: downloadFolder.subtitle) {
                         HStack(spacing: 8) {
                             // A move can take minutes on a slow drive, and it
                             // could not be stopped (full check, 2026-10-01).
                             if downloadFolder.moving != nil {
-                                settingsPill("Cancel") { downloadFolder.cancel() }
+                                settingsPill("取消") { downloadFolder.cancel() }
                                     .disabled(downloadFolder.cancelling)
                                     .opacity(downloadFolder.cancelling ? 0.45 : 1)
                             } else {
                                 if downloadFolder.isCustom {
-                                    settingsPill("Default") { downloadFolder.reset() }
+                                    settingsPill("默认") { downloadFolder.reset() }
                                 }
-                                settingsPill("Change") { downloadFolder.choose() }
+                                settingsPill("更改") { downloadFolder.choose() }
                             }
                         }
                     }
@@ -344,16 +344,16 @@ struct SettingsView: View {
                 // Explore. Still overridable via `defaults write … catalogURL`
                 // for the owner's own testing.
 
-                section("ABOUT") {
+                section("关于") {
                     row(icon: .softwareUpdate,
-                        title: "Software Update",
+                        title: "软件更新",
                         subtitle: updateSubtitle) {
                         updateControl
                     }
                     divider
                     row(icon: .support,
-                        title: "Support Muro",
-                        subtitle: "Muro is free. Sponsoring keeps it that way.") {
+                        title: "支持 Muro",
+                        subtitle: "Muro 免费使用，赞助可支持持续开发。") {
                         sponsorControl
                     }
                 }
@@ -394,17 +394,17 @@ struct SettingsView: View {
         .frame(width: 560, height: 600)
         .menuHost()
         .background(SettingsWindowConfigurator())
-        .alert("Download Folder", isPresented: Binding(
+        .alert("下载文件夹", isPresented: Binding(
             get: { downloadFolder.message != nil },
             set: { if !$0 { downloadFolder.message = nil } }
         )) {
-            Button("OK", role: .cancel) { downloadFolder.message = nil }
+            Button("确定", role: .cancel) { downloadFolder.message = nil }
         } message: {
             Text(downloadFolder.message ?? "")
         }
-        .alert("Clear the library?", isPresented: $confirmClear) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear", role: .destructive) { store.clearDownloadedCache() }
+        .alert("清理资源库？", isPresented: $confirmClear) {
+            Button("取消", role: .cancel) {}
+            Button("清理", role: .destructive) { store.clearDownloadedCache() }
         } message: {
             Text(clearMessage)
         }
@@ -415,13 +415,13 @@ struct SettingsView: View {
     static let pauseAfterChoices = [0, 10, 30, 60, 120, 300, 900, 3600]
 
     static func pauseAfterLabel(_ seconds: Int) -> String {
-        seconds <= 0 ? "Off" : durationLabel(seconds)
+        seconds <= 0 ? "关闭" : durationLabel(seconds)
     }
 
     private var pauseAfterSubtitle: String {
         store.pauseAfterSeconds == 0
-            ? "Wallpapers keep playing"
-            : "Plays for \(durationLabel(store.pauseAfterSeconds)), then holds on a frame"
+            ? "壁纸将持续播放"
+            : "播放 \(durationLabel(store.pauseAfterSeconds)) 后保持静止"
     }
 
     /// Says what macOS will do, not what the menu is called. "System default"
@@ -444,14 +444,14 @@ struct SettingsView: View {
         // has. "Saved. macOS uses it after the current wait ends..." read
         // oddly under Never (full check, 2026-10-01).
         if screenSaverDelayJustChanged, let seconds = screenSaverDelay, seconds > 0 {
-            return "Saved. macOS uses it after the current wait ends, or now if you lock the screen."
+            return "已保存。当前等待结束后生效，锁定屏幕可立即生效。"
         }
         guard let seconds = screenSaverDelay else {
-            return "macOS is deciding. Pick a time to set it."
+            return "当前由 macOS 决定，可选择具体等待时间。"
         }
         return seconds <= 0
-            ? "The screen saver never starts"
-            : "Starts after \(durationLabel(seconds)) with no activity"
+            ? "从不启动屏幕保护程序"
+            : "闲置 \(durationLabel(seconds)) 后启动"
     }
 
     /// Says what is about to happen in counts, and names the part that cannot
@@ -461,33 +461,33 @@ struct SettingsView: View {
         let plan = store.clearPlan
         guard !plan.isEmpty else {
             return plan.keptForSchedules > 0
-                ? "Nothing to clear. Every wallpaper here is playing, or in a playlist or an automation."
-                : "Nothing to clear. The only wallpapers here are the ones in use."
+                ? "无需清理。所有壁纸均正在使用，或已加入播放列表及自动化。"
+                : "无需清理。所有壁纸均正在使用。"
         }
         let count = plan.removed.count + plan.apple.count
-        var text = "This removes \(count) "
-            + (count == 1 ? "wallpaper" : "wallpapers")
-            + " and frees about \(formatSize(plan.bytes + plan.appleBytes))."
+        var text = "将移除 \(count) 张"
+            + (count == 1 ? "壁纸" : "壁纸")
+            + "，释放约 \(formatSize(plan.bytes + plan.appleBytes))。"
         if !plan.apple.isEmpty {
             text += plan.apple.count == 1
-                ? " 1 of them is from the Apple section and can be downloaded again."
-                : " \(plan.apple.count) of them are from the Apple section and can be downloaded again."
+                ? "其中 1 项来自 Apple 专区，可重新下载。"
+                : "其中 \(plan.apple.count) 项来自 Apple 专区，可重新下载。"
         }
         let keptPlaying = plan.kept - plan.keptForSchedules
         if keptPlaying > 0 {
             text += keptPlaying == 1
-                ? " The one that is playing stays."
-                : " The \(keptPlaying) in use stay."
+                ? "正在播放的壁纸将保留。"
+                : "正在使用的 \(keptPlaying) 张壁纸将保留。"
         }
         if plan.keptForSchedules > 0 {
             text += plan.keptForSchedules == 1
-                ? " The one in your playlists and automations stays."
-                : " The \(plan.keptForSchedules) in your playlists and automations stay."
+                ? "播放列表和自动化中的壁纸将保留。"
+                : "播放列表和自动化中的 \(plan.keptForSchedules) 张壁纸将保留。"
         }
         if plan.personal > 0 {
             text += plan.personal == 1
-                ? " 1 of them is your own video and cannot be recovered."
-                : " \(plan.personal) of them are your own videos and cannot be recovered."
+                ? "其中 1 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
+                : "其中 \(plan.personal) 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
         }
         return text
     }
@@ -501,20 +501,20 @@ struct SettingsView: View {
             Text("Muro")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Color.muroInk)
-            Text("Version \(AppStore.appVersion)")
+            Text("版本 \(AppStore.appVersion)")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.muroSecondary)
             if let version = store.latestRelease?.version {
                 Button {
                     openWhatsNew(store)
                 } label: {
-                    Text("Muro \(version) is available. See what's new.")
+                    Text("Muro \(version) 已发布，查看更新内容。")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.muroAccent)
                 }
                 .buttonStyle(.plain)
             }
-            CreditLink(text: "Designed & developed by \(Credits.name)", size: 10)
+            CreditLink(text: "设计与开发：\(Credits.name)", size: 10)
                 .padding(.top, 2)
         }
     }
@@ -569,8 +569,8 @@ struct SettingsView: View {
     /// replays that one.
     private var replaySubtitle: String {
         store.pauseAfterSeconds == 0
-            ? "Works with a Pause After time"
-            : "Plays \(durationLabel(store.pauseAfterSeconds)) again each time the desktop clears"
+            ? "需先设置定时暂停时长"
+            : "每次桌面空闲时重新播放 \(durationLabel(store.pauseAfterSeconds))"
     }
 
     // MARK: - Software update
@@ -578,11 +578,11 @@ struct SettingsView: View {
     private var updateSubtitle: String {
         switch store.updateCheck {
         case .idle:      return "Muro \(AppStore.appVersion)"
-        case .checking:  return "Checking GitHub…"
-        case .upToDate:  return "Muro \(AppStore.appVersion) is the latest version"
+        case .checking:  return "正在检查 GitHub…"
+        case .upToDate:  return "Muro \(AppStore.appVersion) 已是最新版本"
         case .available(let version, _):
-            return "Version \(version) is available on GitHub"
-        case .failed:    return "Couldn't check. Check your connection."
+            return "GitHub 上已发布 \(version) 版本"
+        case .failed:    return "检查失败，请检查网络连接。"
         }
     }
 
@@ -595,7 +595,7 @@ struct SettingsView: View {
         case .available:
             // Muro is not self-updating, so this hands over the DMG itself
             // when the release has one and the release page when it does not.
-            Button("Download ↗") { store.downloadUpdate() }
+            Button("下载 ↗") { store.downloadUpdate() }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.muroOnAccent)
@@ -603,7 +603,7 @@ struct SettingsView: View {
                 .padding(.vertical, 5.5)
                 .background(Capsule().fill(Color.muroAccent))
         default:
-            Button("Check Now") {
+            Button("立即检查") {
                 Task { await store.checkForUpdates(userInitiated: true) }
             }
             .buttonStyle(.plain)
@@ -657,8 +657,8 @@ struct SettingsView: View {
     /// combination where nothing on screen leads back to it.
     private var menuBarSubtitle: String {
         showMenuBarIcon || showDockIcon
-            ? "Quick controls from the menu bar"
-            : "Open Muro from Launchpad or Spotlight"
+            ? "在菜单栏快速控制壁纸"
+            : "从启动台或聚焦搜索打开 Muro"
     }
 
     private var currentMenuBarIcon: MenuBarIconStyle {

@@ -11,8 +11,12 @@ struct WallpaperItem: Identifiable, Equatable {
     var remote: CatalogEntry?
 
     var id: String { local?.id ?? remote?.id ?? "" }
-    var title: String { local?.title ?? remote?.title ?? "" }
+    var title: String {
+        let original = local?.title ?? remote?.title ?? ""
+        return isPersonalImport ? original : ChineseUI.name(original)
+    }
     var category: String { local?.category ?? remote?.category ?? "" }
+    var categoryTitle: String { ChineseUI.name(category) }
     var width: Int { local?.width ?? remote?.width ?? 0 }
     var height: Int { local?.height ?? remote?.height ?? 0 }
     var fps: Double { local?.fps ?? remote?.fps ?? 30 }
@@ -28,12 +32,16 @@ struct WallpaperItem: Identifiable, Equatable {
     /// the importer files it under its own category, which is what tells it
     /// apart from a download while the catalog cannot be reached (then no
     /// download has a catalog entry either).
-    var isPersonalImport: Bool { remote == nil && local?.category == importedVideoCategory }
+    var isImage: Bool { local?.isImage == true }
+    var isPersonalImport: Bool {
+        remote == nil && (isImage || local?.category == importedVideoCategory || local?.category == importedImageCategory)
+    }
     var resolutionLabel: String {
         width >= 3200 ? "4K" : (width >= 2200 ? "1440p" : "1080p")
     }
     var metaLine: String {
-        "\(category) · \(width)×\(height) · \(formatDuration(duration)) · \(formatSize(sizeBytes))"
+        let kind = isImage ? "静态图片" : formatDuration(duration)
+        return "\(categoryTitle) · \(width)×\(height) · \(kind) · \(formatSize(sizeBytes))"
     }
 
     /// When this wallpaper became available to look at, which is what Explore
@@ -67,6 +75,15 @@ enum ApplyTarget: Equatable {
 enum ApplySurface: String, CaseIterable {
     case all = "All", desktop = "Desktop", lockscreen = "Lockscreen"
     case screensaver = "Screensaver"
+
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .desktop: return "桌面"
+        case .lockscreen: return "锁屏"
+        case .screensaver: return "屏幕保护"
+        }
+    }
 
     /// Whether this choice covers Muro's own desktop engine.
     var coversDesktop: Bool { self == .desktop || self == .all }
@@ -112,7 +129,7 @@ enum MacHardware {
         // A Mac mini, Studio or Pro has no built-in screen, so this is only
         // reached when the built-in test itself guessed. Say the honest thing
         // rather than name a machine this might not be.
-        return "Built-in"
+        return "内置"
     }()
 
     private static func deviceTreeProductName() -> String? {
@@ -176,18 +193,18 @@ struct AppliedPlace: Identifiable, Equatable {
     /// card corner to fit into.
     var chipLabel: String {
         switch kind {
-        case .desktop: return display?.chipLabel ?? "ALL DISPLAYS"
-        case .lockScreen: return (display?.chipLabel ?? "ALL DISPLAYS") + " LOCK"
-        case .screenSaver: return "SCREEN SAVER"
+        case .desktop: return display?.chipLabel ?? "所有显示器"
+        case .lockScreen: return (display?.chipLabel ?? "所有显示器") + "锁屏"
+        case .screenSaver: return "屏幕保护程序"
         }
     }
 
     /// For anywhere there is room to read a sentence.
     var fullLabel: String {
         switch kind {
-        case .desktop: return display?.displayName ?? "all displays"
-        case .lockScreen: return "\(display?.displayName ?? "all displays") lock screen"
-        case .screenSaver: return "the screen saver"
+        case .desktop: return display?.displayName ?? "所有显示器"
+        case .lockScreen: return "\(display?.displayName ?? "所有显示器")的锁屏"
+        case .screenSaver: return "屏幕保护程序"
         }
     }
 }
@@ -206,7 +223,7 @@ struct DisplayInfo: Identifiable, Equatable {
     /// applies, since that is the more useful thing to know about a display
     /// you are choosing between; otherwise say what it actually is.
     var kindLabel: String {
-        isMain ? "Main" : (isBuiltIn ? "Built-in" : "External")
+        isMain ? "主" : (isBuiltIn ? "内置" : "外接")
     }
 
     var symbolName: String { isBuiltIn ? "laptopcomputer" : "display" }
@@ -243,7 +260,7 @@ final class AppStore: ObservableObject {
     let statsSampler = StatsSampler()
 
     enum Tab: String, CaseIterable, Identifiable {
-        case home = "Home", explore = "Explore", apple = "Apple", library = "Library"
+        case home = "首页", explore = "探索", apple = "Apple 专区", library = "资源库"
         var id: String { rawValue }
     }
 
@@ -1196,6 +1213,10 @@ final class AppStore: ObservableObject {
         surface: ApplySurface? = nil,
         fromSchedule: Bool = false
     ) {
+        if item.isImage, let surface, surface != .desktop {
+            if !fromSchedule { applyError = "导入的图片目前仅支持设置为桌面壁纸。" }
+            return
+        }
         // A wallpaper whose video was moved or deleted outside Muro keeps its
         // entry and its picture, and setting it used to say "Applied" while
         // nothing played and the desktop fell back to an old still (full
@@ -1203,9 +1224,9 @@ final class AppStore: ObservableObject {
         // pick does not stop a playlist either. A playlist step just skips.
         if let missing = missingVideo(item) {
             if !fromSchedule {
-                applyError = "Muro can't find the video for “\(missing)”. "
-                    + "It was moved or deleted outside Muro. "
-                    + "Delete it in the Library, then download or import it again."
+                applyError = "找不到「\(missing)」的壁纸文件。"
+                    + "文件可能已被其他程序移动或删除。"
+                    + "请从资源库中删除此项，然后重新下载或导入。"
             }
             return
         }
@@ -1277,7 +1298,7 @@ final class AppStore: ObservableObject {
             guard FileManager.default.fileExists(atPath: videoURL.path),
                   FileManager.default.fileExists(atPath: thumbnailURL.path)
             else {
-                applyError = "The downloaded wallpaper files could not be found."
+                applyError = "找不到已下载的壁纸文件。"
                 return
             }
 
@@ -1351,7 +1372,7 @@ final class AppStore: ObservableObject {
         mode: String,
         on role: AppleWallpaperStore.Surface
     ) async {
-        guard lockScreenAvailable else { return }
+        guard lockScreenAvailable, !original.isImage else { return }
         var entry = original
         let resolvedMode = entry.fps > 40 ? mode : "smooth"
         if resolvedMode == "efficient", entry.efficientFile == nil {
@@ -1731,10 +1752,10 @@ final class AppStore: ObservableObject {
         guard let only = places.first else { return nil }
         if places.count == 1 { return only.chipLabel }
         switch appliedSpread(places) {
-        case .everywhere: return "EVERYWHERE"
-        case .allDisplays: return "ALL DISPLAYS"
-        case .allLockScreens: return "ALL LOCK SCREENS"
-        case .some(let count): return "\(count) PLACES"
+        case .everywhere: return "所有位置"
+        case .allDisplays: return "所有显示器"
+        case .allLockScreens: return "所有锁屏"
+        case .some(let count): return "\(count) 个位置"
         }
     }
 
@@ -1746,12 +1767,12 @@ final class AppStore: ObservableObject {
     func appliedFullLabel(for id: String) -> String? {
         let places = appliedPlaces(for: id)
         guard let only = places.first else { return nil }
-        if places.count == 1 { return "Applied on \(only.fullLabel)" }
+        if places.count == 1 { return "已应用到\(only.fullLabel)" }
         switch appliedSpread(places) {
-        case .everywhere: return "Applied everywhere"
-        case .allDisplays: return "Applied on all displays"
-        case .allLockScreens: return "Applied on all lock screens"
-        case .some(let count): return "Applied in \(count) places"
+        case .everywhere: return "已应用到所有位置"
+        case .allDisplays: return "已应用到所有显示器"
+        case .allLockScreens: return "已应用到所有锁屏"
+        case .some(let count): return "已应用到 \(count) 个位置"
         }
     }
 
@@ -1853,32 +1874,38 @@ final class AppStore: ObservableObject {
         }
     }
 
-    // MARK: - Import (user's own videos)
+    // MARK: - Import
 
     func importFiles(_ urls: [URL]) {
-        let videos = urls.filter { ["mp4", "mov", "m4v"].contains($0.pathExtension.lowercased()) }
-        guard !videos.isEmpty else {
-            // Dropping a folder, an image or an unsupported video used to do
-            // nothing whatsoever, with no hint as to why.
+        guard importStatus == nil else {
+            showImportNote("请等待当前导入完成。")
+            return
+        }
+        let media = urls.filter(isImportableMedia)
+        guard !media.isEmpty else {
             if !urls.isEmpty {
-                importError = "Muro imports MP4, MOV and M4V videos, and .saver screen savers. Nothing was added."
+                importError = "支持 JPEG、PNG、HEIC 等图片、MP4、MOV、M4V 视频及 .saver 屏幕保护程序，未添加任何内容。"
             }
             return
         }
-        let skipped = urls.count - videos.count
+        let skipped = urls.count - media.count
         let root = self.root
         let known = manifest.wallpapers
+        importStatus = "正在导入…"
+        importProgress = 0
         Task.detached(priority: .userInitiated) {
             var failures: [String] = []
             var already: [String] = []
             var library = known
-            for (index, url) in videos.enumerated() {
+            for (index, url) in media.enumerated() {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 // The file name and the codec are not news to the person who
                 // just dropped the file. One word, a count and a percentage
                 // are the whole of what they need while they wait; a big file
                 // used to sit at "Importing 1 of 4..." for most of a minute
                 // with nothing moving (full check, 2026-10-01).
-                let label = videos.count == 1 ? "Importing" : "Importing \(index + 1) of \(videos.count)"
+                let label = media.count == 1 ? "正在导入" : "正在导入第 \(index + 1)/\(media.count) 个文件"
                 await MainActor.run {
                     AppStore.shared.importStatus = label + "…"
                     AppStore.shared.importProgress = 0
@@ -1892,7 +1919,7 @@ final class AppStore: ObservableObject {
                     continue
                 }
                 do {
-                    library.append(try importVideo(
+                    library.append(try importMedia(
                         source: url, root: root, sourceFingerprint: fingerprint
                     ) { done in
                         Task { @MainActor in
@@ -1914,22 +1941,22 @@ final class AppStore: ObservableObject {
                 AppStore.shared.recomputeSize()
                 if !duplicates.isEmpty {
                     AppStore.shared.showImportNote(duplicates.count == 1
-                        ? "\(duplicates[0]) is already in your Library."
-                        : "\(duplicates.count) of those videos are already in your Library.")
+                        ? "「\(duplicates[0])」已在资源库中。"
+                        : "其中 \(duplicates.count) 个文件已在资源库中。")
                 }
                 // Silence here is what made a failed import look like a
                 // no-op: the spinner stopped, nothing appeared, and the user
                 // was told nothing at all.
                 if !report.isEmpty {
                     let heading = report.count == 1
-                        ? "This video could not be imported."
-                        : "\(report.count) of \(videos.count) videos could not be imported."
+                        ? "无法导入此文件。"
+                        : "\(media.count) 个文件中有 \(report.count) 个导入失败。"
                     AppStore.shared.importError =
                         ([heading] + report).joined(separator: "\n\n")
                 } else if skipped > 0 {
                     AppStore.shared.importError =
-                        "\(skipped) file\(skipped == 1 ? " was" : "s were") skipped. "
-                        + "Muro imports MP4, MOV and M4V videos."
+                        "已跳过 \(skipped) 个文件。"
+                        + "Muro 支持导入 JPEG、PNG、HEIC 等图片及 MP4、MOV、M4V 视频。"
                 }
             }
         }
@@ -2065,6 +2092,7 @@ final class AppStore: ObservableObject {
             guard let playlist = playlists.first(where: { $0.id == id }),
                   !playlist.wallpaperIDs.isEmpty
             else { return }
+            guard canSchedule(playlist.wallpaperIDs, on: place) else { return }
             makeRoom(for: place)
             resumeForStart(on: place)
             rememberBefore(place)
@@ -2073,12 +2101,19 @@ final class AppStore: ObservableObject {
             guard let automation = automations.first(where: { $0.id == id }),
                   !automation.steps.isEmpty
             else { return }
+            guard canSchedule(automation.steps.map(\.wallpaperID), on: place) else { return }
             makeRoom(for: place)
             resumeForStart(on: place)
             rememberBefore(place)
             runner.startAutomation(automation)
         }
         syncScheduler()
+    }
+
+    private func canSchedule(_ ids: [String], on place: SchedulePlace) -> Bool {
+        guard place != .desktop, ids.contains(where: { item(id: $0)?.isImage == true }) else { return true }
+        applyError = "此计划包含静态图片，目前仅支持在桌面播放。"
+        return false
     }
 
     // MARK: - What a place showed before its schedule
@@ -2376,11 +2411,11 @@ final class AppStore: ObservableObject {
             savePlaylists()
         }
         if let running = activePlaylistID, emptied.contains(running) {
-            let name = playlists.first { $0.id == running }?.name ?? "The playlist"
+            let name = playlists.first { $0.id == running }?.name ?? "此播放列表"
             stopPlaylist()
             deleteNotice = StopNotice(
-                title: "Playlist stopped",
-                message: "\(name) has no wallpapers left, so it stopped."
+                title: "播放列表已停止",
+                message: "「\(name)」已无可用壁纸，已停止播放。"
             )
         }
         let (prunedAutomations, emptiedAutomations) =
@@ -2390,11 +2425,11 @@ final class AppStore: ObservableObject {
             saveAutomations()
         }
         if let running = activeAutomationID, emptiedAutomations.contains(running) {
-            let name = automations.first { $0.id == running }?.name ?? "The automation"
+            let name = automations.first { $0.id == running }?.name ?? "此自动化"
             stopAutomation()
             deleteNotice = StopNotice(
-                title: "Automation stopped",
-                message: "\(name) has no wallpapers left, so it stopped."
+                title: "自动化已停止",
+                message: "「\(name)」已无可用壁纸，已停止播放。"
             )
         }
 
@@ -2610,12 +2645,12 @@ final class AppStore: ObservableObject {
         var parts: [String] = []
         let count = plan.removed.count + plan.apple.count
         if count > 0 {
-            parts.append("\(count) \(count == 1 ? "wallpaper" : "wallpapers") removed")
-            parts.append("about \(formatSize(plan.bytes + plan.appleBytes + swept)) freed")
+            parts.append("已移除 \(count) 张壁纸")
+            parts.append("已释放约 \(formatSize(plan.bytes + plan.appleBytes + swept))")
         } else if swept > 0 {
-            parts.append("\(formatSize(swept)) of leftovers swept")
+            parts.append("已清理 \(formatSize(swept)) 残留文件")
         }
-        return parts.isEmpty ? "Nothing to clear" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "无需清理" : parts.joined(separator: " · ")
     }
 
     /// Manual per-wallpaper space control: delete the local copy of one
@@ -2634,6 +2669,11 @@ final class AppStore: ObservableObject {
     // MARK: - Files
 
     func videoURL(for item: WallpaperItem, mode: String) -> URL? {
+        guard !item.isImage else { return nil }
+        return mediaURL(for: item, mode: mode)
+    }
+
+    func mediaURL(for item: WallpaperItem, mode: String = "smooth") -> URL? {
         guard let entry = item.local else { return nil }
         let url = resolveVideoURL(entry: entry, mode: mode, root: root)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
@@ -2667,14 +2707,14 @@ func importFailureReason(_ error: Error) -> String {
     if let transcode = error as? TranscodeError {
         switch transcode {
         case .noVideoTrack:
-            return "It has no video track."
+            return "文件不包含视频轨道。"
         case .readerFailed:
-            return "It could not be read. The file may be damaged, or in a format macOS cannot open."
+            return "无法读取文件，文件可能损坏或格式不受 macOS 支持。"
         case .writerFailed:
-            return "It could not be converted to HEVC."
+            return "无法转换为 HEVC 格式。"
         }
     }
-    if error is ThumbnailError { return "A picture could not be taken from it." }
+    if error is ThumbnailError { return "无法从视频生成缩略图。" }
     return error.localizedDescription
 }
 

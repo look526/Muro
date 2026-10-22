@@ -12,7 +12,7 @@ struct MenuBarView: View {
         VStack(spacing: 12) {
             header
             transport
-            speedRow
+            if currentItem?.isImage != true { speedRow }
             if !store.recentItems.isEmpty { recents }
             placesSection
             Rectangle().fill(Color.muroInk.opacity(0.08)).frame(height: 1)
@@ -61,7 +61,7 @@ struct MenuBarView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
-                Text("No wallpaper applied")
+                Text("尚未应用壁纸")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
                     .frame(maxWidth: .infinity)
@@ -74,14 +74,14 @@ struct MenuBarView: View {
                 } label: {
                     HStack(spacing: 5) {
                         NotificationDot(size: 6)
-                        Text("Muro \(version) available")
+                        Text("Muro \(version) 可用")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color.muroAccent)
                     }
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Version \(AppStore.appVersion)")
+                Text("版本 \(AppStore.appVersion)")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.muroSecondary)
             }
@@ -90,14 +90,15 @@ struct MenuBarView: View {
 
     private func statusLine(_ item: WallpaperItem) -> String {
         let displays = store.appliedDisplays(for: item.id).count
-        let state = store.isPaused || store.desktopResting ? "PAUSED" : "PLAYING"
+        if item.isImage { return "静态图片 · \(displays) 台显示器" }
+        let state = store.isPaused || store.desktopResting ? "已暂停" : "正在播放"
         // Look up the mode on a display actually showing this wallpaper —
         // the bare all-displays entry can be stale after per-display applies.
         let mode = store.displays
             .compactMap { store.config.assignment(forDisplayUUID: $0.id) }
             .first { $0.wallpaperID == item.id }?.mode
         let fps = mode == "efficient" ? 30 : standardFrameRate(item.fps)
-        let base = "\(state) · \(displays) DISPLAY\(displays == 1 ? "" : "S") · \(fps) FPS"
+        let base = "\(state) · \(displays) 台显示器 · \(fps) 帧/秒"
         // While something is scheduling the wallpaper, its name matters more
         // than the frame rate does.
         if let schedule = store.runningScheduleName {
@@ -132,7 +133,7 @@ struct MenuBarView: View {
                     .background(Circle().fill(Color.muroInk))
             }
             .buttonStyle(.plain)
-            .disabled(currentItem == nil)
+            .disabled(currentItem == nil || currentItem?.isImage == true)
             transportButton("forward.end.fill", enabled: store.activePlaylist != nil) {
                 store.advancePlaylist(forward: true)
             }
@@ -187,7 +188,7 @@ struct MenuBarView: View {
 
     private var recents: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("RECENTS")
+            Text("最近使用")
                 .font(.system(size: 9, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Color.muroAccent)
@@ -217,7 +218,7 @@ struct MenuBarView: View {
     /// every row reads Off.
     private var placesSection: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("PLAYLISTS & AUTOMATIONS")
+            Text("播放列表与自动化")
                 .font(.system(size: 9, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Color.muroAccent)
@@ -246,7 +247,7 @@ struct MenuBarView: View {
             Spacer()
             GlassDropdown(width: 230, arrowEdge: .bottom, options: { store.placeMenu(for: place) }) {
                 HStack(spacing: 4) {
-                    Text(store.nowPlayingName(on: place) ?? "Off")
+                    Text(store.nowPlayingName(on: place) ?? "关闭")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(
                             store.nowPlaying[place] != nil ? Color.muroAccent : Color.muroSecondary
@@ -270,16 +271,16 @@ struct MenuBarView: View {
 
     private var menuButtons: some View {
         VStack(spacing: 2) {
-            menuRow("Open Muro", icon: "macwindow") {
+            menuRow("打开 Muro", icon: "macwindow") {
                 StatusBarController.shared?.closePanel()
                 showMainWindow()
             }
-            menuRow("Settings", icon: "gearshape") {
+            menuRow("设置", icon: "gearshape") {
                 StatusBarController.shared?.closePanel()
                 openSettingsWindow()
             }
             updateRow
-            menuRow("Quit Muro", icon: "power", trailingText: "⌘Q") {
+            menuRow("退出 Muro", icon: "power", trailingText: "⌘Q") {
                 NSApp.terminate(nil)
             }
         }
@@ -356,21 +357,21 @@ struct MenuBarView: View {
             // new version was out. The row still offers the check, because
             // being told is the point of pressing it.
             menuRow(
-                "Check for Updates",
+                "检查更新",
                 icon: "arrow.triangle.2.circlepath",
-                badge: store.latestRelease != nil ? "New Update Available" : nil
+                badge: store.latestRelease != nil ? "有新版本可用" : nil
             ) {
                 Task { await store.checkForUpdates(userInitiated: true) }
             }
         case .checking:
-            updateStatusRow(icon: "arrow.triangle.2.circlepath", title: "Checking…") {
+            updateStatusRow(icon: "arrow.triangle.2.circlepath", title: "正在检查…") {
                 ProgressView()
                     .controlSize(.small)
                     .scaleEffect(0.65)
                     .frame(width: 16, height: 16)
             }
         case .upToDate:
-            updateStatusRow(icon: "checkmark.circle", title: "Muro is up to date") {
+            updateStatusRow(icon: "checkmark.circle", title: "Muro 已是最新版本") {
                 Text("v\(AppStore.appVersion)")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.muroSecondary)
@@ -378,7 +379,7 @@ struct MenuBarView: View {
         case .failed:
             // Tappable, because the usual reason is a network that has since
             // come back and the fix is to press it again.
-            menuRow("Could not check. Try again", icon: "exclamationmark.triangle") {
+            menuRow("检查失败，点击重试", icon: "exclamationmark.triangle") {
                 Task { await store.checkForUpdates(userInitiated: true) }
             }
         case let .available(version, _):
@@ -399,11 +400,11 @@ struct MenuBarView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.muroAccent)
                     .frame(width: 16)
-                Text("Muro \(version) is available")
+                Text("Muro \(version) 已发布")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.muroInk)
                 Spacer()
-                Text("Download")
+                Text("下载")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.muroOnAccent)
                     .padding(.horizontal, 10)

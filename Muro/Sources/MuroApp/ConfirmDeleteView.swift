@@ -95,7 +95,7 @@ struct ConfirmDeleteView: View {
         HStack(spacing: 10) {
             Spacer()
             Button { dismiss() } label: {
-                Text("Cancel")
+                Text("取消")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .padding(.horizontal, 18)
@@ -188,16 +188,16 @@ struct ConfirmDeleteView: View {
 
     /// "Remove Download" opened a sheet asking "Delete this wallpaper?" (full
     /// check, 2026-10-01). A request from that menu item keeps its words.
-    private var actionWord: String { request.removingDownload ? "Remove" : "Delete" }
+    private var actionWord: String { request.removingDownload ? "移除" : "删除" }
 
     private var title: String {
         if request.removingDownload {
-            return items.count == 1 ? "Remove this download?" : "Remove \(items.count) downloads?"
+            return items.count == 1 ? "移除此下载？" : "移除 \(items.count) 项下载？"
         }
         if onlySavers {
-            return items.count == 1 ? "Delete this screen saver?" : "Delete \(items.count) screen savers?"
+            return items.count == 1 ? "删除此屏幕保护程序？" : "删除 \(items.count) 个屏幕保护程序？"
         }
-        return items.count == 1 ? "Delete this wallpaper?" : "Delete \(items.count) wallpapers?"
+        return items.count == 1 ? "删除此壁纸？" : "删除 \(items.count) 张壁纸？"
     }
 
     /// The person's own screen savers. They go to the Trash rather than for
@@ -210,9 +210,9 @@ struct ConfirmDeleteView: View {
 
     /// Said instead of the download line when screen savers are in it.
     private var saverLine: String? {
-        if onlySavers { return items.count == 1 ? "It goes to the Trash." : "They go to the Trash." }
+        if onlySavers { return items.count == 1 ? "将移到废纸篓。" : "将移到废纸篓。" }
         if !savers.isEmpty, personal.isEmpty {
-            return "Screen savers go to the Trash. The others you can download again."
+            return "屏幕保护程序将移到废纸篓，其他内容可重新下载。"
         }
         return nil
     }
@@ -230,17 +230,17 @@ struct ConfirmDeleteView: View {
         if let saverLine { return saverLine }
         if personal.isEmpty {
             return items.count == 1
-                ? "You can download it again any time."
-                : "You can download them again any time."
+                ? "随时可以重新下载。"
+                : "随时可以重新下载。"
         }
         if personal.count == items.count {
             return items.count == 1
-                ? "This is your own video. Deleting it is permanent."
-                : "These are your own videos. Deleting them is permanent."
+                ? "这是导入的壁纸，删除后需重新导入。原始文件不受影响。"
+                : "这些是导入的壁纸，删除后需重新导入。原始文件不受影响。"
         }
         return personal.count == 1
-            ? "1 is your own video, and that one is permanent."
-            : "\(personal.count) are your own videos, and those are permanent."
+            ? "其中 1 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
+            : "其中 \(personal.count) 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
     }
 
     /// What is currently in use, as chips rather than sentences. Two lines of
@@ -249,8 +249,8 @@ struct ConfirmDeleteView: View {
     private var notices: [String] {
         var out: [String] = []
         if let playing = playingNotice { out.append(playing) }
-        if lockScreenAffected { out.append("LOCK SCREEN") }
-        if screenSaverAffected { out.append("SCREEN SAVER") }
+        if lockScreenAffected { out.append("锁屏") }
+        if screenSaverAffected { out.append("屏幕保护程序") }
         return out
     }
 
@@ -266,13 +266,13 @@ struct ConfirmDeleteView: View {
             let shown = items.contains {
                 AppleAerials.isMacOSOnly($0.id) && !store.appliedPlaces(for: $0.id).isEmpty
             }
-            return shown ? "SHOWING NOW" : nil
+            return shown ? "正在显示" : nil
         }
         let displays = store.appliedDisplays(for: first.id)
         if applied.count == 1, displays.count == 1, let display = displays.first {
-            return "PLAYING ON \(friendly(display).uppercased())"
+            return "正在\(friendly(display))播放"
         }
-        return "PLAYING NOW"
+        return "正在播放"
     }
 
     /// The playlists and automations a delete takes these out of. The sheet
@@ -287,10 +287,10 @@ struct ConfirmDeleteView: View {
         let list: String
         switch names.count {
         case 1: list = last
-        case 2, 3: list = names.dropLast().joined(separator: ", ") + " and " + last
-        default: list = "\(names.count) playlists and automations"
+        case 2, 3: list = names.dropLast().joined(separator: ", ") + "和" + last
+        default: list = "\(names.count) 个播放列表和自动化"
         }
-        return (items.count == 1 ? "It also comes out of " : "They also come out of ") + list + "."
+        return "同时将从以下计划中移除：" + list + "。"
     }
 
     private var lockScreenAffected: Bool {

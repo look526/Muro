@@ -97,7 +97,7 @@ final class DesktopStillService {
         let stillsDir = self.stillsDir
         Task.detached(priority: .userInitiated) {
             for item in missing {
-                Self.generateStill(id: item.id, video: item.video, into: stillsDir)
+                Self.generateStill(id: item.id, media: item.media, isImage: item.isImage, into: stillsDir)
             }
             await MainActor.run {
                 guard token == self.generation, let pending = self.pending else { return }
@@ -116,8 +116,8 @@ final class DesktopStillService {
         config: EngineConfig,
         manifest: LibraryManifest,
         lockScreenDisplays: Set<String>
-    ) -> [(id: String, video: URL)] {
-        var missing: [(id: String, video: URL)] = []
+    ) -> [(id: String, media: URL, isImage: Bool)] {
+        var missing: [(id: String, media: URL, isImage: Bool)] = []
         var stillForExtension: URL?
         var anyWallpaper = false
         // One entry per display, so the extension can draw each screen's own
@@ -136,9 +136,9 @@ final class DesktopStillService {
             anyWallpaper = true
             let still = stillURL(for: entry.id)
             guard FileManager.default.fileExists(atPath: still.path) else {
-                let video = resolveVideoURL(entry: entry, mode: assignment.mode, root: root)
-                if FileManager.default.fileExists(atPath: video.path) {
-                    missing.append((entry.id, video))
+                let media = resolveVideoURL(entry: entry, mode: assignment.mode, root: root)
+                if FileManager.default.fileExists(atPath: media.path) {
+                    missing.append((entry.id, media, entry.isImage))
                 }
                 continue
             }
@@ -233,16 +233,20 @@ final class DesktopStillService {
     /// right. The library thumbnail would have been free but it is capped at
     /// 1280, and this is not only a tint source: it is what the user actually
     /// sees whenever Muro is not the thing on screen.
-    private nonisolated static func generateStill(id: String, video: URL, into directory: URL) {
+    private nonisolated static func generateStill(id: String, media: URL, isImage: Bool, into directory: URL) {
         let destination = directory.appendingPathComponent("\(id).jpg")
         guard !FileManager.default.fileExists(atPath: destination.path) else { return }
         do {
             try FileManager.default.createDirectory(
                 at: directory, withIntermediateDirectories: true
             )
-            try generateThumbnail(
-                video: video, destination: destination, at: 1.0, maxDimension: 3840
-            )
+            if isImage {
+                try generateImageThumbnail(image: media, destination: destination, maxDimension: 7680)
+            } else {
+                try generateThumbnail(
+                    video: media, destination: destination, at: 1.0, maxDimension: 3840
+                )
+            }
         } catch {
             // A still is a fallback. Failing to make one must never stop a
             // wallpaper being applied.
@@ -250,7 +254,7 @@ final class DesktopStillService {
     }
 
     private func isOurs(_ url: URL) -> Bool {
-        url.standardizedFileURL.path.hasPrefix(stillsDir.standardizedFileURL.path)
+        url.standardizedFileURL.path.hasPrefix(stillsDir.standardizedFileURL.path + "/")
     }
 
     /// A wallpaper staged by Muro's own lock-screen extension. Recording one

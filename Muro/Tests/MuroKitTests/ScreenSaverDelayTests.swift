@@ -47,37 +47,37 @@ final class ScreenSaverDelayTests: XCTestCase {
     // MARK: The wording
 
     func testMinutesReadAsMinutes() {
-        XCTAssertEqual(ScreenSaverDelay.label(60), "1 min")
-        XCTAssertEqual(ScreenSaverDelay.label(300), "5 min")
-        XCTAssertEqual(ScreenSaverDelay.label(1800), "30 min")
+        XCTAssertEqual(ScreenSaverDelay.label(60), "1 分钟")
+        XCTAssertEqual(ScreenSaverDelay.label(300), "5 分钟")
+        XCTAssertEqual(ScreenSaverDelay.label(1800), "30 分钟")
     }
 
     func testHoursReadAsHours() {
-        XCTAssertEqual(ScreenSaverDelay.label(3600), "1 h")
-        XCTAssertEqual(ScreenSaverDelay.label(5400), "1 h 30 min")
-        XCTAssertEqual(ScreenSaverDelay.label(9000), "2 h 30 min")
-        XCTAssertEqual(ScreenSaverDelay.label(10800), "3 h")
+        XCTAssertEqual(ScreenSaverDelay.label(3600), "1 小时")
+        XCTAssertEqual(ScreenSaverDelay.label(5400), "1 小时 30 分钟")
+        XCTAssertEqual(ScreenSaverDelay.label(9000), "2 小时 30 分钟")
+        XCTAssertEqual(ScreenSaverDelay.label(10800), "3 小时")
     }
 
     func testZeroReadsAsNever() {
-        XCTAssertEqual(ScreenSaverDelay.label(ScreenSaverDelay.never), "Never")
+        XCTAssertEqual(ScreenSaverDelay.label(ScreenSaverDelay.never), "从不")
     }
 
     /// Nothing Muro writes is negative, but Apple's key is a plain integer
     /// anyone can put anything in, and a negative one is still a target below
     /// the guard, so it means the same thing.
     func testANegativeValueAlsoReadsAsNever() {
-        XCTAssertEqual(ScreenSaverDelay.label(-30), "Never")
+        XCTAssertEqual(ScreenSaverDelay.label(-30), "从不")
     }
 
     func testAnAbsentPreferenceSaysSoRatherThanNamingADurationMuroDoesNotKnow() {
-        XCTAssertEqual(ScreenSaverDelay.label(nil), "System default")
+        XCTAssertEqual(ScreenSaverDelay.label(nil), "系统默认")
     }
 
     /// A value set by hand, or by an older macOS, still has to render.
     func testAValueOutsideTheListStillReads() {
-        XCTAssertEqual(ScreenSaverDelay.label(45), "45 s")
-        XCTAssertEqual(ScreenSaverDelay.label(2700), "45 min")
+        XCTAssertEqual(ScreenSaverDelay.label(45), "45 秒")
+        XCTAssertEqual(ScreenSaverDelay.label(2700), "45 分钟")
     }
 
     func testEveryChoiceHasALabel() {
