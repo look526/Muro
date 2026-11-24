@@ -9,8 +9,8 @@ public enum ImageImportError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .unreadable: return "无法读取图片，文件可能损坏或格式不受 macOS 支持。"
-        case .writeFailed: return "无法保存图片缩略图。"
+        case .unreadable: return L("It could not be read. The file may be damaged, or in a format macOS cannot open.")
+        case .writeFailed: return L("The picture thumbnail could not be saved.", ctx: "fork")
         }
     }
 }
@@ -103,6 +103,7 @@ public func importMedia(
     root: URL = LibraryManifest.defaultRoot(),
     preserveOriginal: Bool = false,
     sourceFingerprint: String? = nil,
+    keepAudio: Bool = false,
     progress: ((Double) -> Void)? = nil
 ) throws -> WallpaperEntry {
     if isImageFile(source) {
@@ -113,6 +114,7 @@ public func importMedia(
     }
     return try importVideo(
         source: source, title: title, category: category, root: root,
-        preserveOriginal: preserveOriginal, sourceFingerprint: sourceFingerprint, progress: progress
+        preserveOriginal: preserveOriginal, sourceFingerprint: sourceFingerprint,
+        keepAudio: keepAudio, progress: progress
     )
 }

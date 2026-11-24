@@ -28,7 +28,11 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
     /// came from, so importing the same file again can be recognised. Nil for
     /// downloads and for imports made before it was kept.
     public var sourceFingerprint: String?
-    /// Absent in older libraries, whose entries are all videos.
+    /// Issue #54. True for a video the person added that kept its sound.
+    /// Nil for every download, which is always silent, and for imports made
+    /// before Muro kept sound.
+    public var hasSound: Bool?
+    /// Absent in older libraries, whose non-interactive entries are videos.
     public var mediaType: WallpaperMediaType?
     public var isImage: Bool { mediaType == .image }
 
@@ -40,6 +44,7 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
         liked: Bool = false, dateAdded: Date = Date(),
         pauseAfterSeconds: Int? = nil,
         sourceFingerprint: String? = nil,
+        hasSound: Bool? = nil,
         mediaType: WallpaperMediaType? = nil
     ) {
         self.id = id
@@ -58,6 +63,7 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
         self.dateAdded = dateAdded
         self.pauseAfterSeconds = pauseAfterSeconds
         self.sourceFingerprint = sourceFingerprint
+        self.hasSound = hasSound
         self.mediaType = mediaType
     }
 
@@ -66,7 +72,19 @@ public struct WallpaperEntry: Codable, Identifiable, Equatable {
     /// list by hand was one more chance to forget the preview or the
     /// efficient variant and leave it on disk forever.
     public var relativeFiles: [String] {
-        [file, efficientFile, previewFile, thumbnail].compactMap { $0 }
+        // An interactive wallpaper is a whole folder, of which `file` is only
+        // the page it opens with. Only ever a folder of its own inside
+        // `Interactive`: a path of any other shape names the page alone, so
+        // nothing above it can be deleted by mistake.
+        if isInteractive {
+            let parts = file.split(separator: "/", omittingEmptySubsequences: false)
+            if parts.count == 3, parts[0] == InteractiveWallpapers.folderName,
+               !parts[1].isEmpty, parts[1] != ".", parts[1] != ".." {
+                return ["\(parts[0])/\(parts[1])", thumbnail]
+            }
+            return file.hasPrefix("/") ? [] : [file, thumbnail]
+        }
+        return [file, efficientFile, previewFile, thumbnail].compactMap { $0 }
     }
 }
 

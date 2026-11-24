@@ -120,7 +120,7 @@ private struct DayTrack: View {
             .fill(Color.muroInk.opacity(0.05))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.muroInk.opacity(0.11), lineWidth: 1)
+                    .strokeBorder(Color.muroRim.opacity(0.11), lineWidth: 1)
             )
             .overlay {
                 GeometryReader { geo in
@@ -176,7 +176,7 @@ private struct SpanBlock: View {
                 .allowsHitTesting(false)
             }
         }
-        .overlay(shape.strokeBorder(Color.muroInk.opacity(0.22), lineWidth: 1))
+        .overlay(shape.strokeBorder(Color.muroRim.opacity(0.22), lineWidth: 1))
         .padding(.leading, 2)
     }
 
@@ -203,7 +203,7 @@ private struct GapBlock: View {
             shape.fill(Color.muroWarn.opacity(0.10))
             shape.strokeBorder(Color.muroWarn.opacity(0.22), lineWidth: 1)
             if labelled, width > 96 {
-                Text("未安排")
+                Text(L("Not covered"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.muroWarn.opacity(0.95))
                     .padding(.horizontal, 11)
@@ -359,7 +359,7 @@ struct DayTimelineEditor: View {
                 context.stroke(shape, with: .color(Color.muroWarn.opacity(0.22)), lineWidth: 1)
                 if rect.width > 96 {
                     context.draw(
-                        Text("未安排")
+                        Text(L("Not covered"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color.muroWarn.opacity(0.95)),
                         at: CGPoint(x: rect.minX + 11, y: rect.midY),

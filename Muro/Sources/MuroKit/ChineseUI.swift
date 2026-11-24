@@ -6,6 +6,10 @@ public enum ChineseUI {
         names[value] ?? value
     }
 
+    public static func localizedName(_ value: String) -> String {
+        Localization.shared.language == .simplifiedChinese ? name(value) : value
+    }
+
     private static let names: [String: String] = [
         "All": "全部", "Anime": "动漫", "Video Games": "游戏", "Cars": "汽车",
         "Nature": "自然", "Sci-fi": "科幻", "Movies": "影视", "Abstract": "抽象",

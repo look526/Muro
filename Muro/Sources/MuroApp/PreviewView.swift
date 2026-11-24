@@ -46,6 +46,8 @@ struct PreviewView: View {
     @State private var setButtonWidth: CGFloat = 0
     @State private var heldSetButtonWidth: CGFloat?
     @State private var customPauseAfter = false
+    /// Hands a click on a running interactive wallpaper to its page.
+    @State private var pageLink = InteractivePreviewLink()
     @StateObject private var loader = PreviewLoader()
     /// Apple's aerials learn their real size and their sharp picture while
     /// this is open, and this has to redraw when they do.
@@ -72,17 +74,30 @@ struct PreviewView: View {
                 pillBar(item)
                     .padding(.bottom, 26)
             }
+            .overlay(alignment: .topTrailing) { creditBadge(item) }
             .ignoresSafeArea()
-            .background(Color.muroBG)
+            // Black behind a video, as in any player, on Light too.
+            .background(Color.black)
             .onAppear { prepareAerial() }
             .onChange(of: itemID) { _, _ in prepareAerial() }
+        }
+    }
+
+    /// Who made an interactive wallpaper, on its page only (owner,
+    /// 2026-11-19). Muro's own say who made them too.
+    @ViewBuilder private func creditBadge(_ item: WallpaperItem) -> some View {
+        if item.isInteractive, let author = store.interactiveAuthor(of: item.id) {
+            CreditBadge(author: author)
+                .padding(.top, 22)
+                .padding(.trailing, 24)
+                .allowsHitTesting(false)
         }
     }
 
     /// Asks for the aerial's real size and its sharp picture at once, so the
     /// bar never shows a guess for longer than one small request takes.
     private func prepareAerial() {
-        if item?.isImage == true {
+        if item?.isInteractive == true || item?.isImage == true {
             store.applySurface = .desktop
             return
         }
@@ -108,7 +123,9 @@ struct PreviewView: View {
     @ViewBuilder private func media(_ item: WallpaperItem) -> some View {
         GeometryReader { proxy in
             Group {
-                if item.isImage {
+                if item.isInteractive {
+                    interactiveMedia(item, size: proxy.size)
+                } else if item.isImage {
                     ThumbImage(item: item, maxPixels: ImageCache.fullPixels)
                 } else if let url = store.videoURL(for: item, mode: store.previewMode) ??
                              store.videoURL(for: item, mode: "smooth") {
@@ -127,6 +144,26 @@ struct PreviewView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
+        }
+    }
+
+    /// An interactive wallpaper runs here as it will on the desktop: it
+    /// follows the pointer, answers a click, and moves with the Mac's sound.
+    @ViewBuilder private func interactiveMedia(_ item: WallpaperItem, size: CGSize) -> some View {
+        if let page = store.pageURL(for: item) {
+            ZStack {
+                ThumbImage(item: item, maxPixels: ImageCache.fullPixels)
+                InteractivePreview(page: page, link: pageLink)
+            }
+            .contentShape(Rectangle())
+            .gesture(SpatialTapGesture().onEnded { tap in
+                guard size.width > 0, size.height > 0 else { return }
+                pageLink.click?(tap.location.x / size.width, tap.location.y / size.height)
+            })
+        } else {
+            // Not downloaded: its picture. Preview downloads it, and then it
+            // runs here (owner, 2026-11-19).
+            HostedStill(item: item)
         }
     }
 
@@ -171,22 +208,43 @@ struct PreviewView: View {
 
     // MARK: - Pill bar
 
+    // The bar sits on the playing video, so it is drawn in Dark's colours
+    // whatever the look, the way video controls stay dark in Apple's own
+    // players. Written out because macOS picks a system colour by the
+    // window's look, not by the part of the window drawing it.
+    private var barInk: Color { Color.white.opacity(0.85) }
+    private var barOnInk: Color { Color.black }
+    private var barSecondary: Color { Color.white.opacity(0.55) }
+    private var barGreen: Color { Color(hex: 0x30D158) }
+    private var barWarn: Color { Color(hex: 0xFF9F0A) }
+
     private func pillBar(_ item: WallpaperItem) -> some View {
         HStack(spacing: 14) {
             backButton
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.muroInk)
+                    .foregroundStyle(barInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                Text(metaLine(item))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(Color.muroSecondary)
-                if let fitWarning = fitWarning(item) {
+                if item.isInteractive {
+                    // Said here, small, on the wallpaper's own page: what it
+                    // is, what it costs and where it works (owner, 2026-11-12).
+                    Text(L("Interactive wallpaper. Uses more CPU and RAM than a live wallpaper. Works only on the desktop."))
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(barSecondary)
+                        .lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 240, alignment: .leading)
+                } else {
+                    Text(metaLine(item))
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(barSecondary)
+                }
+                if !item.isInteractive, let fitWarning = fitWarning(item) {
                     Text(fitWarning)
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(Color.muroWarn)
+                        .foregroundStyle(barWarn)
                         .lineLimit(1)
                 }
             }
@@ -215,7 +273,7 @@ struct PreviewView: View {
                 fpsToggle(item)
             }
 
-            if item.isDownloaded, !isAerial, !item.isImage { pauseAfterPill(item) }
+            if item.isDownloaded, !isAerial, !item.isInteractive, !item.isImage { pauseAfterPill(item) }
 
             HeartButton(item: item, size: 40)
 
@@ -244,46 +302,43 @@ struct PreviewView: View {
                     ChooseDisplayPopover(item: item)
                         .environmentObject(store)
                 }
+                // It opens over the playing wallpaper, so on Light it takes
+                // the whitish glass: on the clear one its buttons could barely
+                // be seen (owner, 2026-11-21).
+                .environment(\.muroRegularGlass, true)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.9))
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.muroShade.opacity(0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(Color.muroInk.opacity(0.14), lineWidth: 1)
-        )
+        .modifier(BarSurface())
+        .modifier(OnTheVideo())
     }
 
     /// Size, dimensions and length, or for Apple's pictures and the ones
     /// macOS draws, what they are, since those have no length to give.
     private func metaLine(_ item: WallpaperItem) -> String {
         if item.isImage {
-            let line = "静态图片 · \(item.width)×\(item.height) · \(formatSize(item.sizeBytes))"
-            return store.missingVideo(item) != nil ? "图片文件缺失 · " + line : line
+            let line = L("Still picture · %@×%@ · %@", item.width, item.height, formatSize(item.sizeBytes))
+            return store.missingVideo(item) != nil ? L("Picture file missing · %@.", line, ctx: "fork") : line
         }
         // macOS animates these when they appear and when the Mac is
         // unlocked, then holds them still, as it does in System Settings.
-        if item.id.hasPrefix(AppleAerials.drawnPrefix) { return "macOS 实时绘制 · 解锁时播放" }
-        if item.id.hasPrefix(AppleScreenSavers.idPrefix) { return "屏幕保护程序 · macOS 实时绘制" }
+        if item.id.hasPrefix(AppleAerials.drawnPrefix) { return L("Drawn by macOS · moves when you unlock") }
+        if item.id.hasPrefix(AppleScreenSavers.idPrefix) { return L("Screen saver · drawn live by macOS") }
         if item.id.hasPrefix(AppleAerials.picturePrefix) {
+            // The size is unknown until Apple's catalogue is read (issue
+            // #53), and saying none is better than a wrong "0 MB".
+            guard item.sizeBytes > 0 else { return L("Still picture · %@×%@", item.width, item.height) }
             // Apple sends every picture of the day in one download, and Muro
             // keeps only the one this card stands for, so the two sizes are
             // far apart. Each is said for what it is.
             let size = store.isApplePictureDownloaded(item)
                 ? formatSize(item.sizeBytes)
-                : "需下载 \(formatSize(item.sizeBytes))"
-            return "静态图片 · \(item.width)×\(item.height) · \(size)"
+                : L("%@ download", formatSize(item.sizeBytes))
+            return L("Still picture · %@×%@ · %@", item.width, item.height, size)
         }
         let line = "\(item.width)×\(item.height) · \(formatSize(item.sizeBytes)) · \(formatDuration(item.duration))"
         // Its picture still shows, so say why nothing moves.
-        return store.missingVideo(item) != nil ? "视频文件缺失 · " + line : line
+        return store.missingVideo(item) != nil ? L("Video file missing · %@", line) : line
     }
 
     /// A video that will not fill a screen well, said before it is set.
@@ -295,8 +350,12 @@ struct PreviewView: View {
     /// this speaks about the person's own videos.
     private func fitWarning(_ item: WallpaperItem) -> String? {
         guard item.width > 0, item.height > 0 else { return nil }
-        if item.height > item.width { return "竖屏\(item.isImage ? "图片" : "视频") · 放大以填满屏幕" }
-        if item.width < 1920 { return "分辨率较低 · 显示可能不够清晰" }
+        if item.height > item.width {
+            return item.isImage
+                ? L("Vertical picture · zoomed in to fill the screen", ctx: "fork")
+                : L("Vertical video · zoomed in to fill the screen")
+        }
+        if item.width < 1920 { return L("Low resolution · may look soft on the screen") }
         return nil
     }
 
@@ -314,11 +373,11 @@ struct PreviewView: View {
     /// font-metric center (e.g. share's arrow) so they look centered.
     private func barIcon(_ systemName: String, opticalYOffset: CGFloat = 0) -> some View {
         ZStack {
-            Circle().fill(Color.muroInk.opacity(0.08))
-            Circle().strokeBorder(Color.muroInk.opacity(0.14), lineWidth: 1)
+            Circle().fill(barInk.opacity(0.08))
+            Circle().strokeBorder(Color.muroRim.opacity(0.14), lineWidth: 1)
             Image(systemName: systemName)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.muroInk)
+                .foregroundStyle(barInk)
                 .offset(y: opticalYOffset)
         }
         .frame(width: 40, height: 40)
@@ -328,25 +387,25 @@ struct PreviewView: View {
 
     private func fpsToggle(_ item: WallpaperItem) -> some View {
         HStack(spacing: 2) {
-            fpsSegment("\(standardFrameRate(item.fps))", mode: "smooth", hint: "CPU 占用较高", item: item)
-            fpsSegment("30", mode: "efficient", hint: "CPU 占用较低", item: item)
+            fpsSegment("\(standardFrameRate(item.fps))", mode: "smooth", hint: L("Higher CPU"), item: item)
+            fpsSegment("30", mode: "efficient", hint: L("Lower CPU"), item: item)
         }
         .padding(3)
-        .background(Capsule().fill(Color.muroInk.opacity(0.08)))
-        .overlay(Capsule().strokeBorder(Color.muroInk.opacity(0.14), lineWidth: 1))
+        .background(Capsule().fill(barInk.opacity(0.08)))
+        .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.14), lineWidth: 1))
     }
 
     private func fpsSegment(_ label: String, mode: String, hint: String, item: WallpaperItem) -> some View {
         let selected = store.previewMode == mode
         return Text(label)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(selected ? Color.muroOnInk : Color.muroInk.opacity(0.7))
+            .foregroundStyle(selected ? barOnInk : barInk.opacity(0.7))
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
-            .background { if selected { Capsule().fill(Color.muroInk) } }
+            .background { if selected { Capsule().fill(barInk) } }
             .contentShape(Capsule())
             .onTapGesture { store.setPreviewMode(mode, for: item) }
-            .help("\(label) 帧/秒 · \(hint)")
+            .help(L("%@ fps · %@", label, hint))
     }
 
     // MARK: - Pause after (per wallpaper)
@@ -364,13 +423,13 @@ struct PreviewView: View {
         // Centred on the pill: it sits in the middle of the bottom bar, so a
         // menu hanging off either edge of it looks like a mistake.
         return GlassDropdown(width: 190, arrowEdge: .top, align: .center, options: {
-            [MenuOption(title: "使用全局设置（\(SettingsView.pauseAfterLabel(store.pauseAfterSeconds))）",
+            [MenuOption(title: L("Use setting (%@)", SettingsView.pauseAfterLabel(store.pauseAfterSeconds)),
                         checked: !overridden) {
                 store.setPauseAfter(nil, for: item)
             }, .divider]
             + choices.map { seconds in
                 MenuOption(
-                    title: seconds == 0 ? "从不暂停" : durationLabel(seconds),
+                    title: seconds == 0 ? L("Never pause") : durationLabel(seconds),
                     checked: overridden && value == seconds
                 ) { store.setPauseAfter(seconds == 0 ? -1 : seconds, for: item) }
             }
@@ -379,23 +438,23 @@ struct PreviewView: View {
             // tick whenever the time is not one of the list's, which includes
             // a 2 or 15 minute time picked before the list was shortened.
             + [.divider, MenuOption(
-                title: "自定义",
+                title: L("Custom"),
                 checked: overridden && value > 0 && !choices.contains(value)
             ) { customPauseAfter = true }]
         }) {
             HStack(spacing: 6) {
                 Image(systemName: "pause.circle")
                     .font(.system(size: 12))
-                    .foregroundStyle(overridden ? Color.muroAccent : Color.muroInk.opacity(0.75))
-                Text(value == 0 ? "关闭" : durationLabel(value))
+                    .foregroundStyle(overridden ? Color.muroAccent : barInk.opacity(0.75))
+                Text(value == 0 ? L("Off") : durationLabel(value))
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(overridden ? Color.muroAccent : Color.muroInk)
+                    .foregroundStyle(overridden ? Color.muroAccent : barInk)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.muroInk.opacity(0.08)))
+            .background(Capsule().fill(barInk.opacity(0.08)))
             .overlay(Capsule().strokeBorder(
-                overridden ? Color.muroAccent.opacity(0.4) : Color.muroInk.opacity(0.14),
+                overridden ? Color.muroAccent.opacity(0.4) : barInk.opacity(0.14),
                 lineWidth: 1
             ))
         }
@@ -405,7 +464,9 @@ struct PreviewView: View {
                 set: { store.setPauseAfter($0, for: item) }
             )) { customPauseAfter = false }
         }
-        .help("定时暂停：播放指定时长后停留在当前画面")
+        // The menu and the card open over the playing wallpaper too.
+        .environment(\.muroRegularGlass, true)
+        .help(L("Pause after: how long this wallpaper moves before holding on a frame"))
     }
 
     // MARK: - Download / Set Wallpaper
@@ -417,16 +478,16 @@ struct PreviewView: View {
             HStack(spacing: 10) {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .tint(Color.muroInk)
+                    .tint(barInk)
                     .frame(width: 70)
-                Text("\(Int(progress * 100))% · 共 \(formatSize(item.sizeBytes))")
+                Text(L("%@% of %@", Int(progress * 100), formatSize(item.sizeBytes)))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.muroInk.opacity(0.8))
+                    .foregroundStyle(barInk.opacity(0.8))
                     .monospacedDigit()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(Capsule().fill(Color.muroInk.opacity(0.14)))
+            .background(Capsule().fill(barInk.opacity(0.14)))
         } else if !item.isDownloaded {
             // Preview and Download are ONE action wearing two words — both
             // pull the master. "Preview" is the smaller ask, and once someone
@@ -435,21 +496,21 @@ struct PreviewView: View {
             // plain (owner, 2026-07-19): the size already sits in the
             // subtitle, and the progress capsule shows "% of NN MB".
             HStack(spacing: 10) {
-                glassButton("下载", systemName: "arrow.down") {
+                glassButton(L("Download"), systemName: "arrow.down") {
                     store.download(item)
                 }
-                capsuleButton("预览", systemName: "play.fill") {
+                capsuleButton(L("Preview"), systemName: "play.fill") {
                     store.download(item)
                 }
             }
         } else if store.generating.contains(item.id) {
-            Text("正在准备 30 帧版本…")
+            Text(L("Preparing 30 fps…"))
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
-                .foregroundStyle(Color.muroInk.opacity(0.75))
+                .foregroundStyle(barInk.opacity(0.75))
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
-                .background(Capsule().fill(Color.muroInk.opacity(0.14)))
+                .background(Capsule().fill(barInk.opacity(0.14)))
         } else if store.applyingLockScreen {
             settingFace
         } else if store.appliedFullLabel(for: item.id) != nil {
@@ -466,7 +527,7 @@ struct PreviewView: View {
             }
             .buttonStyle(.plain)
         } else {
-            capsuleButton("设置壁纸", systemName: nil) {
+            capsuleButton(L("Set Wallpaper"), systemName: nil) {
                 showDisplayPopover.toggle()
             }
         }
@@ -481,16 +542,16 @@ struct PreviewView: View {
             HStack(spacing: 10) {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .tint(Color.muroInk)
+                    .tint(barInk)
                     .frame(width: 70)
-                Text("\(Int(progress * 100))% · 共 \(formatSize(item.sizeBytes))")
+                Text(L("%@% of %@", Int(progress * 100), formatSize(item.sizeBytes)))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.muroInk.opacity(0.8))
+                    .foregroundStyle(barInk.opacity(0.8))
                     .monospacedDigit()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(Capsule().fill(Color.muroInk.opacity(0.14)))
+            .background(Capsule().fill(barInk.opacity(0.14)))
         } else if store.applyingLockScreen {
             settingFace
         } else if store.appliedFullLabel(for: item.id) != nil {
@@ -504,15 +565,15 @@ struct PreviewView: View {
             // Download fetches the full picture from Apple. Set Wallpaper does
             // the same by itself when it has to (owner, 2026-09-30).
             HStack(spacing: 10) {
-                glassButton("下载", systemName: "arrow.down") {
+                glassButton(L("Download"), systemName: "arrow.down") {
                     store.downloadApplePictureNow(item)
                 }
-                capsuleButton("设置壁纸", systemName: nil) {
+                capsuleButton(L("Set Wallpaper"), systemName: nil) {
                     showDisplayPopover.toggle()
                 }
             }
         } else {
-            capsuleButton("设置壁纸", systemName: nil) {
+            capsuleButton(L("Set Wallpaper"), systemName: nil) {
                 showDisplayPopover.toggle()
             }
         }
@@ -524,20 +585,20 @@ struct PreviewView: View {
     /// The hidden "Set Wallpaper" keeps it exactly that button's size.
     private var settingFace: some View {
         ZStack {
-            Text("设置壁纸")
+            Text(L("Set Wallpaper"))
                 .font(.system(size: 13, weight: .semibold))
                 .hidden()
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(Color.muroInk)
-                Text("正在设置…")
+                ProgressView().controlSize(.small).tint(barInk)
+                Text(L("Setting…"))
                     .font(.system(size: 13, weight: .semibold))
             }
         }
         .fixedSize()
-        .foregroundStyle(Color.muroInk.opacity(0.82))
+        .foregroundStyle(barInk.opacity(0.82))
         .padding(.horizontal, 22)
         .padding(.vertical, 12)
-        .background(Capsule().fill(Color.muroInk.opacity(0.12)))
+        .background(Capsule().fill(barInk.opacity(0.12)))
     }
 
     /// Applied anywhere at all. Just "Applied", in the same box as Set
@@ -545,22 +606,22 @@ struct PreviewView: View {
     /// say where); the panel this opens shows where it is, with a green dot.
     private var appliedFace: some View {
         ZStack {
-            Text("设置壁纸")
+            Text(L("Set Wallpaper"))
                 .font(.system(size: 13, weight: .semibold))
                 .hidden()
             HStack(spacing: 7) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                Text("已应用")
+                Text(L("Applied"))
                     .font(.system(size: 13, weight: .semibold))
             }
         }
         .fixedSize()
-        .foregroundStyle(Color.muroGreen)
+        .foregroundStyle(barGreen)
         .padding(.horizontal, 22)
         .padding(.vertical, 12)
-        .background(Capsule().fill(Color.muroInk.opacity(0.12)))
-        .overlay(Capsule().strokeBorder(Color.muroGreen.opacity(0.4), lineWidth: 1))
+        .background(Capsule().fill(barInk.opacity(0.12)))
+        .overlay(Capsule().strokeBorder(barGreen.opacity(0.4), lineWidth: 1))
     }
 
     private func capsuleButton(_ title: String, systemName: String?, action: @escaping () -> Void) -> some View {
@@ -574,10 +635,10 @@ struct PreviewView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(Color.muroOnInk)
+            .foregroundStyle(barOnInk)
             .padding(.horizontal, 22)
             .padding(.vertical, 12)
-            .background(Capsule().fill(Color.muroInk))
+            .background(Capsule().fill(barInk))
         }
         .buttonStyle(.plain)
     }
@@ -594,11 +655,11 @@ struct PreviewView: View {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(Color.muroInk)
+            .foregroundStyle(barInk)
             .padding(.horizontal, 22)
             .padding(.vertical, 12)
-            .background(Capsule().fill(Color.muroInk.opacity(0.12)))
-            .overlay(Capsule().strokeBorder(Color.muroInk.opacity(0.2), lineWidth: 1))
+            .background(Capsule().fill(barInk.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.2), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -631,6 +692,23 @@ struct ChooseDisplayPopover: View {
     /// three gaps, against the 310pt these cards leave. See the tab row.
     static let pillPadding: CGFloat = 11
     static let pillGap: CGFloat = 3
+
+    /// The size the four place names are set in: the largest of three at which
+    /// all four fit the card on one line each. Some languages have long words
+    /// for these ("Рабочий стол", "スクリーンセーバ"), and a long word gets a
+    /// smaller font, never cut short and never wrapped (owner's rule).
+    static var pillFontSize: CGFloat {
+        let room: CGFloat = 340 - 15 * 2 - pillGap * 3
+        for size: CGFloat in [11.5, 10.5, 9.5] {
+            let font = NSFont.systemFont(ofSize: size, weight: .semibold)
+            let width = ApplySurface.allCases.reduce(CGFloat(0)) { total, surface in
+                total + (surface.title as NSString).size(withAttributes: [.font: font]).width
+                    + pillPadding * 2
+            }
+            if width <= room { return size }
+        }
+        return 9.5
+    }
     /// One animation for the whole popover, so the tab pill, the crossfade and
     /// a card turning green all move together instead of at three speeds.
     static let ease = Animation.spring(response: 0.34, dampingFraction: 0.86)
@@ -642,6 +720,9 @@ struct ChooseDisplayPopover: View {
     /// pills used to be simply disabled with a small "26+" badge, which says
     /// there is a rule without ever saying what it is.
     @State private var showLockRequirement = false
+    /// Shown when someone picks anywhere but the desktop for an interactive
+    /// wallpaper, which can only react where there is a pointer.
+    @State private var showDesktopOnly = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -663,9 +744,11 @@ struct ChooseDisplayPopover: View {
             // whole card appears to jump (owner, 2026-07-20).
             ZStack {
                 chooser
-                    .opacity(showLockRequirement ? 0 : 1)
-                    .allowsHitTesting(!showLockRequirement)
-                if showLockRequirement {
+                    .opacity(showLockRequirement || showDesktopOnly ? 0 : 1)
+                    .allowsHitTesting(!showLockRequirement && !showDesktopOnly)
+                if showDesktopOnly {
+                    desktopOnlyCard.transition(.opacity)
+                } else if showLockRequirement {
                     lockRequirementCard.transition(.opacity)
                 }
             }
@@ -688,11 +771,11 @@ struct ChooseDisplayPopover: View {
             }
             .frame(width: 40, height: 40)
 
-            Text("需要 macOS 26")
+            Text(L("This needs macOS 26"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
 
-            Text("锁屏和屏幕保护程序需要 macOS 26 的系统功能。本机运行 \(Self.osLabel)，目前仅支持设置桌面壁纸。")
+            Text(L("The lock screen and the screen saver use a part of macOS that arrived in macOS 26. This Mac runs %@, so Muro can set your desktop but not those.", Self.osLabel))
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -702,13 +785,52 @@ struct ChooseDisplayPopover: View {
             Button {
                 withAnimation(Self.ease) { showLockRequirement = false }
             } label: {
-                Text("改为设置桌面壁纸")
+                Text(L("Set my desktop instead"))
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 7)
                     .background(Capsule().fill(Color.muroInk.opacity(0.12)))
-                    .overlay(Capsule().strokeBorder(Color.muroInk.opacity(0.2), lineWidth: 1))
+                    .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.2), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Why an interactive wallpaper has only the desktop, in the same voice.
+    private var desktopOnlyCard: some View {
+        VStack(spacing: 9) {
+            ZStack {
+                Circle().fill(Color.muroInk.opacity(0.10))
+                Image(systemName: "cursorarrow.rays")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.muroInk)
+            }
+            .frame(width: 40, height: 40)
+
+            Text(L("Desktop only"))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.muroInk)
+
+            Text(L("An interactive wallpaper moves with your pointer and your Mac's sound. The lock screen and the screen saver have neither, so it plays on the desktop."))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(Color.muroSecondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(1.5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                withAnimation(Self.ease) { showDesktopOnly = false }
+            } label: {
+                Text(L("Set my desktop instead"))
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.muroInk)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(Color.muroInk.opacity(0.12)))
+                    .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.2), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .padding(.top, 2)
@@ -732,7 +854,7 @@ struct ChooseDisplayPopover: View {
                 // is no display to choose. Saying so is better than a picker
                 // whose choice does not matter, and better than hiding the
                 // card people are used to clicking.
-                Text(isScreenSaver ? "所有显示器" : "选择显示器")
+                Text(isScreenSaver ? L("Every display") : L("Choose display"))
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
                 Spacer()
@@ -797,7 +919,7 @@ struct ChooseDisplayPopover: View {
             // macOS refuses a still picture as the screen saver (it asks for
             // files a picture record does not have), so there is nothing to
             // apply. Said here rather than offering a card that fails.
-            Text("macOS 无法将静态图片设为屏幕保护程序。")
+            Text(L("macOS can't use a still picture as the screen saver."))
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -821,16 +943,16 @@ struct ChooseDisplayPopover: View {
             } label: {
                 cardLabel(
                     symbol: "display.2",
-                    name: "所有屏幕",
-                    sublabel: "所有显示器",
+                    name: L("All Screens"),
+                    sublabel: L("Every display"),
                     applied: applied
                 )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
                 applied
-                    ? "从屏幕保护程序移除「\(item.title)」"
-                    : "将「\(item.title)」设为屏幕保护程序"
+                    ? L("Remove %@ from the screen saver", item.title)
+                    : L("Apply %@ to the screen saver", item.title)
             )
         }
         .frame(maxWidth: .infinity)
@@ -866,7 +988,7 @@ struct ChooseDisplayPopover: View {
             }
             .padding(.horizontal, 8)
             if applied {
-                Text("移除")
+                Text(L("Remove"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color(hex: 0xFF6B6B))
                     .padding(.horizontal, 11)
@@ -887,7 +1009,7 @@ struct ChooseDisplayPopover: View {
             .fill(.glassSheen(0.12, 0.05)))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
             .strokeBorder(
-                applied ? Color.muroGreen.opacity(0.55) : Color.muroInk.opacity(0.14),
+                applied ? Color.muroGreen.opacity(0.55) : Color.muroRim.opacity(0.14),
                 lineWidth: applied ? 1.5 : 1
             ))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -906,10 +1028,19 @@ struct ChooseDisplayPopover: View {
 
     private func surfacePill(_ surface: ApplySurface) -> some View {
         let selected = store.applySurface == surface
-        let enabled = !surface.needsAppleExtension || store.lockScreenAvailable
+        // An interactive wallpaper has the desktop and nothing else.
+        let desktopOnly = item.isInteractive && surface != .desktop
+        let enabled = (!surface.needsAppleExtension || store.lockScreenAvailable) && !desktopOnly
         // Constant font weight: weight changes used to resize the labels and
         // make "Lockscreen" jump sideways when switching Both → Desktop.
         return Button {
+            guard !desktopOnly else {
+                withAnimation(Self.ease) {
+                    showLockRequirement = false
+                    showDesktopOnly = true
+                }
+                return
+            }
             guard enabled else {
                 // Not disabled any more. A dead button tells someone their
                 // click failed; this tells them what the rule is.
@@ -918,24 +1049,25 @@ struct ChooseDisplayPopover: View {
             }
             withAnimation(Self.ease) {
                 showLockRequirement = false
+                showDesktopOnly = false
                 store.applySurface = surface
             }
         } label: {
             Text(surface.title)
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(.system(size: Self.pillFontSize, weight: .semibold))
                 .lineLimit(1)
                 .fixedSize()
-                .foregroundStyle(selected ? Color.muroOnInk : Color.muroInk.opacity(enabled ? 0.8 : 0.3))
+                .foregroundStyle(selected ? Color.muroOnPicked : Color.muroInk.opacity(enabled ? 0.8 : 0.3))
                 .padding(.horizontal, Self.pillPadding)
                 .padding(.vertical, 6)
                 .background {
                     if selected {
-                        Capsule().fill(Color.muroInk)
+                        Capsule().fill(Color.muroPicked)
                             .matchedGeometryEffect(id: "surface", in: surfaceNS)
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if !enabled {
+                    if !enabled, !desktopOnly {
                         Text("26+")
                             .font(.system(size: 6.5, weight: .bold))
                             .tracking(0.6)
@@ -949,9 +1081,9 @@ struct ChooseDisplayPopover: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("应用到\(surface.title)")
-        .accessibilityValue(selected ? "已选择" : "未选择")
-        .help(enabled ? "" : "锁屏和屏幕保护程序需要 macOS 26 或更新版本")
+        .accessibilityLabel(L("Apply to %@", surface.title))
+        .accessibilityValue(selected ? L("Selected") : L("Not selected"))
+        .help(enabled || desktopOnly ? "" : L("The lock screen and screen saver require macOS 26 or later"))
     }
 
     private var allPill: some View {
@@ -963,7 +1095,7 @@ struct ChooseDisplayPopover: View {
                 apply(.all)
             }
         } label: {
-            Text(appliedEverywhere ? "全部移除" : "所有显示器")
+            Text(appliedEverywhere ? L("Remove all") : L("All displays"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(appliedEverywhere ? Color(hex: 0xFF6B6B) : Color.muroInk)
                 .padding(.horizontal, 13)
@@ -976,12 +1108,12 @@ struct ChooseDisplayPopover: View {
                 .overlay(Capsule().strokeBorder(
                     appliedEverywhere
                         ? Color(hex: 0xFF6B6B).opacity(0.4)
-                        : Color.muroInk.opacity(0.18),
+                        : Color.muroRim.opacity(0.18),
                     lineWidth: 1
                 ))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(appliedEverywhere ? "从所有显示器移除" : "应用到所有显示器")
+        .accessibilityLabel(appliedEverywhere ? L("Remove from all displays") : L("Apply to all displays"))
     }
 
     private func displayCard(_ display: DisplayInfo) -> some View {
@@ -1011,8 +1143,8 @@ struct ChooseDisplayPopover: View {
         .buttonStyle(.plain)
         .accessibilityLabel(
             appliedHere
-                ? "从\(display.displayName)移除「\(item.title)」"
-                : "将「\(item.title)」应用到\(display.displayName)"
+                ? L("Remove %@ from %@", item.title, display.displayName)
+                : L("Apply %@ to %@", item.title, display.displayName)
         )
     }
 }
@@ -1080,5 +1212,26 @@ enum ShareFile {
 
     static func clear() {
         try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+/// The wallpaper page's bar: Liquid Glass over the video, the way Apple's
+/// players float their controls, with a dark wash inside it so the white
+/// words read on a bright picture too.
+private struct BarSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+        return content
+            .background(shape.fill(Color.black.opacity(0.28)))
+            .appleGlass(shape)
+    }
+}
+
+/// The wallpaper page's bar sits on the playing video, so on Light it takes
+/// Dark's colours, the way video controls stay dark in Apple's own players.
+/// Every Light and Dark colour is macOS's own and follows this.
+private struct OnTheVideo: ViewModifier {
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, .dark)
     }
 }

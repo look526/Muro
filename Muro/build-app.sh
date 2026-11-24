@@ -8,8 +8,8 @@ set -e
 # The one place Muro's version is written. The app bundle, the wallpaper
 # extension and the DMG name are all derived from these two lines, and the
 # build fails below if the app and the extension ever disagree.
-VERSION="6.0.2"
-BUILD="108"
+VERSION="6.2"
+BUILD="159"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 APP="$DIR/dist/Muro.app"
@@ -43,6 +43,22 @@ rm -rf "$DIR/dist"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN_PATH/muro-app" "$APP/Contents/MacOS/Muro"
+# Mark the app with the SDK it was really compiled against. SwiftPM's
+# universal build writes the deployment target (14.0) as the SDK as well, and
+# macOS then runs Muro in the older design's compatibility mode: the grey
+# window colour, the old greys, and none of macOS 26's Liquid Glass on its
+# system parts (owner, 2026-11-20: Muro must look exactly like Apple's own
+# apps). The minimum stays 14.0, so who can run Muro does not change.
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace \
+    -output "$APP/Contents/MacOS/Muro.stamped" "$APP/Contents/MacOS/Muro" 2>&1 \
+    | grep -v "code signature will be invalid" || true
+mv "$APP/Contents/MacOS/Muro.stamped" "$APP/Contents/MacOS/Muro"
+if ! otool -l "$APP/Contents/MacOS/Muro" | grep -q "sdk $SDK_VERSION"; then
+    echo "ERROR: the app is not marked with SDK $SDK_VERSION" >&2
+    exit 1
+fi
+echo "==> marked as built with the macOS $SDK_VERSION SDK (runs on 14.0 and later)"
 # Takes a picture of an imported screen saver that carries none of its own,
 # in a process of its own so a broken screen saver cannot crash Muro.
 if [[ ! -f "$BIN_PATH/muro-saver-picture" ]]; then
@@ -55,7 +71,6 @@ cp "$BIN_PATH/muro-saver-picture" "$APP/Contents/MacOS/muro-saver-picture"
 # ExtensionFoundation installs the correct entry point and actor isolation.
 # The private wallpaper framework is loaded only at runtime.
 EXT="$APP/Contents/Extensions/MuroWallpaperExtension.appex"
-SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
 if (( ${SDK_VERSION%%.*} >= 26 )); then
 echo "==> building macOS 26+ wallpaper extension"
 EXT_DERIVED="$DIR/.build/muro-wallpaper-extension"
@@ -101,9 +116,45 @@ cp "$ICON_OUT/Assets.car" "$ICON_OUT/MuroIcon.icns" "$APP/Contents/Resources/"
 else
     cp "$DIR/Icon/AppIcon.icns" "$APP/Contents/Resources/MuroIcon.icns"
 fi
-cp "$DIR/Icon/InApp/MuroIcon-Default.png" "$DIR/Icon/InApp/MuroIcon-Light.png" \
-    "$DIR/Icon/InApp/MuroIcon-Dark.png" "$APP/Contents/Resources/"
+cp "$DIR/Icon/InApp/MuroIcon-Light.png" "$DIR/Icon/InApp/MuroIcon-Dark.png" "$APP/Contents/Resources/"
 cp "$DIR/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
+
+# The first-launch welcome's two films (WelcomeView.swift): the Muro moon
+# turning, with a see-through background, and the 8 second intro. A build
+# without them still works; the welcome falls back to the icon and skips the
+# intro.
+for film in WelcomeMoon WelcomeIntro; do
+    if [ -f "$DIR/Welcome/$film.mov" ]; then
+        cp "$DIR/Welcome/$film.mov" "$APP/Contents/Resources/$film.mov"
+    else
+        echo "warning: Welcome/$film.mov missing, the welcome will do without it" >&2
+    fi
+done
+# The intro's music (WelcomeMusic in WelcomeView.swift). A build without it
+# plays the intro silent.
+if [ -f "$DIR/Welcome/WelcomeSound.mp3" ]; then
+    cp "$DIR/Welcome/WelcomeSound.mp3" "$APP/Contents/Resources/WelcomeSound.mp3"
+else
+    echo "warning: Welcome/WelcomeSound.mp3 missing, the intro will play silent" >&2
+fi
+# One frame of the moon, still, for the community step's website card
+# (CommunityLinks.swift). Without it the card shows the app icon.
+cp "$DIR/Welcome/WelcomeMoonStill.png" "$APP/Contents/Resources/WelcomeMoonStill.png"
+
+# Muro's languages (issue #62): one folder per language, read by
+# Localization.swift, and named in Info.plist below so macOS offers them in
+# System Settings > General > Language & Region > Applications. The extension
+# carries its own two lines, the names System Settings shows for Muro in its
+# Wallpaper pane, which follow the Mac's language.
+cp -R "$DIR/Localization/"*.lproj "$APP/Contents/Resources/"
+if [[ -d "$EXT" ]]; then
+    mkdir -p "$EXT/Contents/Resources"
+    cp -R "$DIR/Localization/Extension/"*.lproj "$EXT/Contents/Resources/"
+fi
+LOCALIZATIONS=""
+for lproj in "$DIR/Localization/"*.lproj; do
+    LOCALIZATIONS="$LOCALIZATIONS<string>$(basename "$lproj" .lproj)</string>"
+done
 
 # Bundled wallpaper: "Snowfall in Forest" full 4K master + thumb, so a fresh
 # install always has one wallpaper playing in the hero (owner decision — 4K
@@ -139,6 +190,35 @@ else
     done
 fi
 
+# Muro's own interactive wallpapers (issue #59): one folder each, with the
+# page, its picture for the cards, its still for the desktop and its name.
+# Read by InteractiveWallpapers.builtInEntries. A build without them simply
+# has none.
+if [ -d "$DIR/Interactive" ]; then
+    mkdir -p "$APP/Contents/Resources/Interactive"
+    for wallpaper in "$DIR/Interactive/"*/; do
+        name="$(basename "$wallpaper")"
+        for needed in index.html wallpaper.json thumb.jpg still.jpg; do
+            if [ ! -f "$wallpaper$needed" ]; then
+                echo "ERROR: Interactive/$name has no $needed" >&2
+                exit 1
+            fi
+        done
+        cp -R "$wallpaper" "$APP/Contents/Resources/Interactive/$name"
+    done
+fi
+
+# What macOS shows if it asks whether Muro may read one of the folders it
+# guards. Muro reads a file there in two cases: the desktop picture of somebody
+# who uses Muro only for the lock screen, wherever they keep it, and the live
+# wallpapers of somebody who moved their download folder there. Each language
+# has the same sentence in its InfoPlist.strings.
+FOLDER_USE="Muro reads your desktop picture here to keep it on the desktop while a live wallpaper is on the lock screen, and plays the live wallpapers you keep here."
+# What macOS shows when it asks whether Muro may listen to the sound the Mac
+# plays, which it asks the first time an interactive wallpaper that moves with
+# sound is shown. Each language has the same sentence in its InfoPlist.strings.
+SOUND_USE="Muro listens to the sound your Mac is playing so an interactive wallpaper can move with it. The sound is never recorded, kept or sent anywhere."
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -146,8 +226,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key>            <string>Muro</string>
     <key>CFBundleDisplayName</key>     <string>Muro</string>
-    <key>CFBundleDevelopmentRegion</key> <string>zh_CN</string>
-    <key>CFBundleLocalizations</key> <array><string>zh-Hans</string></array>
     <key>CFBundleExecutable</key>      <string>Muro</string>
     <key>CFBundleIconFile</key>        <string>MuroIcon</string>
     <key>CFBundleIconName</key>        <string>MuroIcon</string>
@@ -160,11 +238,24 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key> <true/>
     <key>LSApplicationCategoryType</key> <string>public.app-category.entertainment</string>
     <key>NSHumanReadableCopyright</key> <string>Designed &amp; developed by MrRockySL</string>
+    <key>CFBundleDevelopmentRegion</key> <string>zh-Hans</string>
+    <key>CFBundleLocalizations</key>   <array>$LOCALIZATIONS</array>
+    <key>NSDesktopFolderUsageDescription</key>    <string>$FOLDER_USE</string>
+    <key>NSDocumentsFolderUsageDescription</key>  <string>$FOLDER_USE</string>
+    <key>NSDownloadsFolderUsageDescription</key>  <string>$FOLDER_USE</string>
+    <key>NSRemovableVolumesUsageDescription</key> <string>$FOLDER_USE</string>
+    <key>NSNetworkVolumesUsageDescription</key>   <string>$FOLDER_USE</string>
+    <key>NSAudioCaptureUsageDescription</key>     <string>$SOUND_USE</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>    <string>com.mrrockysl.muro</string>
+            <key>CFBundleURLSchemes</key> <array><string>muro</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST
-mkdir -p "$APP/Contents/Resources/zh-Hans.lproj"
-cp "$DIR/Localization/zh-Hans/InfoPlist.strings" "$APP/Contents/Resources/zh-Hans.lproj/"
 
 # A mismatched app and appex is the kind of thing nobody notices until an
 # install refuses to load the extension, so check it here rather than hope.

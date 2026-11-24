@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MuroKit
 
 /// Custom menu bar item + dropdown panel. Replaces MenuBarExtra(.window):
 /// on macOS 26+ its system window draws a large glass sheet of its own
@@ -14,6 +15,9 @@ final class StatusBarController: NSObject {
     private let panel: NSPanel
     private let container = NSView()
     private let blur = NSVisualEffectView()
+    /// macOS 26's own glass panel (an `NSGlassEffectView`), the surface of
+    /// Apple's menu bar panels, for Light and Dark. Nil before macOS 26.
+    private var glassView: NSView?
     private let hostingView: NSHostingView<MenuBarPanelRoot>
     private let store: AppStore
     private var eventMonitors: [Any] = []
@@ -54,6 +58,17 @@ final class StatusBarController: NSObject {
         blur.autoresizingMask = [.width, .height]
         container.addSubview(blur)
 
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = 26
+            glass.autoresizingMask = [.width, .height]
+            glass.isHidden = true
+            container.addSubview(glass)
+            glassView = glass
+        }
+#endif
+
         hostingView.autoresizingMask = [.width, .height]
         container.addSubview(hostingView)
         panel.contentView = container
@@ -79,15 +94,50 @@ final class StatusBarController: NSObject {
         Task { @MainActor in self.applyLook() }
     }
 
-    /// The panel's AppKit half follows the look: its appearance, the
-    /// material behind the card, and the rim. The SwiftUI half redraws itself.
+    /// The panel is dark on every look (owner, 2026-11-21). Dark's is Muro's
+    /// classic panel: the dark heads-up glass with its wash and white edge,
+    /// and Muro's own glass rows, in Dark's colours, so its buttons are macOS
+    /// blue ("the same default, but the buttons go with blue"). Light's is
+    /// macOS 26's Liquid Glass, dark, in Dark's colours. The menus it opens
+    /// match. On System, whichever look the Mac is on.
+    static var drawsClassicPanel: Bool { !Appearance.shared.isLight }
+
+    /// The panel's AppKit half follows the look: the material behind the
+    /// card, and the rim. Always the dark appearance, so macOS's own colours
+    /// resolve to Dark's in it on Light too. The SwiftUI half redraws itself.
     private func applyLook() {
-        let light = Appearance.shared.isLight
-        panel.appearance = NSAppearance(named: light ? .aqua : .darkAqua)
-        blur.material = light ? .popover : .hudWindow
-        container.layer?.borderColor = (light
-            ? NSColor.black.withAlphaComponent(0.1)
-            : NSColor.white.withAlphaComponent(0.14)).cgColor
+        panel.appearance = NSAppearance(named: .darkAqua)
+        // Light uses the material macOS gives its own popovers and menu bar
+        // panels. Dark keeps the classic, darker heads-up glass.
+        blur.material = Self.drawsClassicPanel ? .hudWindow : .popover
+        container.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        // On macOS 26, Light sits on Liquid Glass itself, the panel Apple's
+        // menu bar items open, with the controls inside it: its own edge
+        // light replaces the rim. Dark keeps the blur and the rim.
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
+            let useGlass = !Self.drawsClassicPanel
+            // Regular on Light as well as Dark. The clear glass let the
+            // desktop show through and the panel could not be read (owner,
+            // 2026-11-21: "go with the whitish liquid"). `muroRegularGlass`
+            // below does the same for its controls and menus.
+            glass.style = .regular
+            blur.isHidden = useGlass
+            glass.isHidden = !useGlass
+            container.layer?.borderWidth = useGlass ? 0 : 1
+            if useGlass {
+                if glass.contentView !== hostingView {
+                    hostingView.removeFromSuperview()
+                    hostingView.frame = glass.bounds
+                    glass.contentView = hostingView
+                }
+            } else if hostingView.superview !== container {
+                glass.contentView = nil
+                hostingView.frame = container.bounds
+                container.addSubview(hostingView)
+            }
+        }
+#endif
     }
 
     // MARK: - Status item
@@ -150,6 +200,13 @@ final class StatusBarController: NSObject {
         // fires on the very first open and never again: a check made on Monday
         // was still saying "Muro is up to date" on Friday.
         store.clearUpdateCheckResult()
+        // Same reason: the recents row is told here to start at the newest,
+        // and the header which display the panel is opening on, so it shows
+        // that display's page.
+        NotificationCenter.default.post(
+            name: .muroMenuBarPanelOpening,
+            object: buttonWindow.screen.flatMap { displayUUID(for: $0) }
+        )
         let size = hostingView.fittingSize
         let anchor = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         var x = anchor.midX - size.width / 2
@@ -217,6 +274,13 @@ final class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 
+extension Notification.Name {
+    /// Posted as the menu bar panel opens. Its view is built once and only
+    /// ordered back on screen, so `onAppear` hears the first open and no
+    /// other; this hears every one.
+    static let muroMenuBarPanelOpening = Notification.Name("MuroMenuBarPanelOpening")
+}
+
 /// The panel never activates the app, so without this the first click on any
 /// control is swallowed by click-through protection.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
@@ -232,8 +296,14 @@ struct MenuBarPanelRoot: View {
     var body: some View {
         MenuBarView()
             .environmentObject(store)
-            .background(Color.muroShade.opacity(0.25))
+            // Light: macOS's own glass alone, the way Apple's menu bar panels
+            // look. Dark keeps the classic dark wash.
+            .background(Color.muroShade.opacity(StatusBarController.drawsClassicPanel ? 0.25 : 0))
+            .environment(\.muroRegularGlass, true)
+            .environment(\.muroClassicGlass, StatusBarController.drawsClassicPanel)
             .muroColorScheme()
+            // Dark on every look, Light included (see `drawsClassicPanel`).
+            .environment(\.muroColorSchemeOverride, .dark)
     }
 }
 
@@ -312,7 +382,11 @@ final class MenuBarMenuPanel {
         let body = content()
             .frame(width: width)
             .padding(Self.pad)
+            // Like the panel: dark on every look, the classic card on Dark.
+            .environment(\.muroRegularGlass, true)
+            .environment(\.muroClassicGlass, StatusBarController.drawsClassicPanel)
             .muroColorScheme()
+            .environment(\.muroColorSchemeOverride, .dark)
 
         let hosting = FirstMouseHostingView(rootView: body)
         let size = hosting.fittingSize
@@ -332,7 +406,8 @@ final class MenuBarMenuPanel {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
-        panel.appearance = NSAppearance(named: Appearance.shared.isLight ? .aqua : .darkAqua)
+        // Dark on every look, like the panel it opens from.
+        panel.appearance = NSAppearance(named: .darkAqua)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
 

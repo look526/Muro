@@ -1,4 +1,5 @@
 import SwiftUI
+import MuroKit
 import AppKit
 
 /// The icon Muro shows in the menu bar, chosen in Settings, General (6.0).
@@ -31,12 +32,12 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .standard: return "默认"
-        case .outline: return "轮廓"
-        case .glassMoon: return "玻璃月亮"
-        case .planet: return "行星"
-        case .peaks: return "山峰"
-        case .display: return "显示器"
+        case .standard: return L("Default", ctx: "icon")
+        case .outline: return L("Outline")
+        case .glassMoon: return L("Glass Moon")
+        case .planet: return L("Planet")
+        case .peaks: return L("Peaks")
+        case .display: return L("Display", ctx: "icon")
         }
     }
 

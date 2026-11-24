@@ -60,7 +60,7 @@ struct AutomationEditorView: View {
         guard !name.isEmpty else { return nil }
         let existing = store.automations.map { (id: $0.id, name: $0.name) }
         return nameIsTaken(name, in: existing, excluding: editingID)
-            ? "此名称已被使用" : nil
+            ? L("Name already in use") : nil
     }
 
     private var editingID: String? {
@@ -92,13 +92,13 @@ struct AutomationEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SheetHeader(title: isNew ? "新建自动化" : "编辑自动化") { dismiss() }
+            SheetHeader(title: isNew ? L("New Automation") : L("Edit Automation")) { dismiss() }
                 .padding(.horizontal, 26)
                 .padding(.top, 26)
 
             HStack(spacing: 14) {
                 GlassTextField(
-                    label: "名称", placeholder: "自动化名称",
+                    label: L("NAME"), placeholder: L("Automation name"),
                     text: $name, problem: nameProblem
                 )
                 modePicker
@@ -112,7 +112,7 @@ struct AutomationEditorView: View {
                 .padding(.horizontal, 26)
                 .padding(.top, 10)
 
-            SectionLabel("选择壁纸", trailing: "此计划中有 \(steps.count) 项")
+            SectionLabel(L("CHOOSE WALLPAPERS"), trailing: L("%@ in this schedule", steps.count))
                 .padding(.horizontal, 26)
                 .padding(.top, 22)
 
@@ -130,7 +130,7 @@ struct AutomationEditorView: View {
         .sheetSurface()
         .menuHost()
         .onAppear(perform: load)
-        .confirmScheduleDelete($confirmingDelete, kind: "自动化", name: trimmedName) {
+        .confirmScheduleDelete($confirmingDelete, kind: "automation", name: trimmedName) {
             if case .edit(let automation) = target { store.deleteAutomation(automation) }
             dismiss()
         }
@@ -157,8 +157,8 @@ struct AutomationEditorView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     SectionLabel(
-                        mode == .timer ? "每张壁纸的播放时长" : "每张壁纸的播放时段",
-                        trailing: mode == .timer ? "拖动手柄调整顺序" : "拖动边缘调整时间"
+                        mode == .timer ? L("HOW LONG EACH ONE PLAYS") : L("WHEN EACH ONE PLAYS"),
+                        trailing: mode == .timer ? L("Drag the handle to reorder") : L("Drag an edge to change a time")
                     )
                     .padding(.horizontal, 26)
                     .padding(.top, 22)
@@ -210,12 +210,12 @@ struct AutomationEditorView: View {
             Image(systemName: mode == .timer ? "timer" : "clock")
                 .font(.system(size: 22, weight: .light))
                 .foregroundStyle(Color.muroInk.opacity(0.22))
-            Text("暂无计划")
+            Text(L("Nothing scheduled yet"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.muroInk.opacity(0.75))
             Text(mode == .timer
-                 ? "选择上方壁纸，默认播放十分钟。每张壁纸都可设置独立时长。"
-                 : "选择一张壁纸以覆盖全天，添加更多壁纸后将自动分配时段。")
+                 ? L("Pick a wallpaper above and it plays for ten minutes. Every one you add gets its own length.")
+                 : L("Pick a wallpaper above and it takes the whole day. Add another and the day splits between them."))
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -230,7 +230,7 @@ struct AutomationEditorView: View {
         loaded = true
         switch target {
         case .new:
-            name = uniqueName(base: "新建自动化", taken: store.automations.map(\.name))
+            name = uniqueName(base: L("New Automation"), taken: store.automations.map(\.name))
         case .edit(let automation):
             name = automation.name
             mode = automation.mode
@@ -243,9 +243,10 @@ struct AutomationEditorView: View {
     private var modePicker: some View {
         PillSegments(
             options: [
-                PillOption(Automation.Mode.timer.rawValue, "按时长", systemImage: "timer"),
-                PillOption(Automation.Mode.clock.rawValue, "按时段", systemImage: "clock")
+                PillOption(Automation.Mode.timer.rawValue, L("Timer"), systemImage: "timer"),
+                PillOption(Automation.Mode.clock.rawValue, L("Clock"), systemImage: "clock")
             ],
+            picker: true,
             selection: Binding(
                 get: { mode.rawValue },
                 set: { raw in
@@ -263,8 +264,8 @@ struct AutomationEditorView: View {
 
     private var modeHint: String {
         mode == .timer
-            ? "每张壁纸按设定时长播放，随后切换到下一张并循环。"
-            : "每张壁纸在指定时段播放，每天重复相同计划。"
+            ? L("Each wallpaper plays for its own length of time, then the next one takes over and it loops.")
+            : L("Each wallpaper owns a slot on the clock, and the same schedule repeats every day.")
     }
 
     /// Moving between modes must not leave a step with nothing set. Clock
@@ -291,7 +292,7 @@ struct AutomationEditorView: View {
     /// wallpaper you own to reach the thing you came to set.
     @ViewBuilder private var picker: some View {
         if store.scheduleItems.isEmpty {
-            Text("暂无已下载的壁纸。请前往「探索」下载，或点击资源库中的 + 导入图片或视频。")
+            Text(L("No wallpapers downloaded yet. Download some from Explore, or import your own with the + button in the Library."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.muroSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -383,9 +384,9 @@ struct AutomationEditorView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Color.muroInk.opacity(0.1), lineWidth: 1)
+                            .strokeBorder(Color.muroRim.opacity(0.1), lineWidth: 1)
                     )
-                Text(store.item(id: step.wallpaperID)?.title ?? "壁纸缺失")
+                Text(store.item(id: step.wallpaperID)?.title ?? L("Missing wallpaper"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .lineLimit(1)
@@ -403,10 +404,10 @@ struct AutomationEditorView: View {
                         .foregroundStyle(Color.muroInk.opacity(0.7))
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(Color.muroInk.opacity(0.07)))
-                        .overlay(Circle().strokeBorder(Color.muroInk.opacity(0.12), lineWidth: 1))
+                        .overlay(Circle().strokeBorder(Color.muroRim.opacity(0.12), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .help("从此自动化中移除")
+                .help(L("Remove from this automation"))
             }
             .padding(.horizontal, 13)
             .frame(height: 58)
@@ -417,7 +418,7 @@ struct AutomationEditorView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .strokeBorder(
-                        focused ? Color.muroAccent.opacity(0.5) : Color.muroInk.opacity(0.1),
+                        focused ? Color.muroAccent.opacity(0.5) : Color.muroRim.opacity(0.1),
                         lineWidth: focused ? 1.5 : 1
                     )
             )
@@ -559,7 +560,7 @@ struct AutomationEditorView: View {
             TimeChip(minute: step.start, focused: false) { delta in
                 steps = Automation.movingEdge(.start, of: id, by: delta, in: steps)
             }
-            Text("至")
+            Text(L("to", ctx: "range"))
                 .font(.system(size: 11))
                 .foregroundStyle(Color.muroSecondary)
                 .fixedSize()
@@ -573,7 +574,7 @@ struct AutomationEditorView: View {
     /// to be eight trips through a dropdown.
     private var durationPresets: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("统一设置所有步骤")
+            Text(L("Set every step at once"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
             HStack(spacing: 8) {
@@ -587,7 +588,7 @@ struct AutomationEditorView: View {
                             .padding(.horizontal, 13)
                             .frame(height: 30)
                             .background(Capsule().fill(Color.muroInk.opacity(0.06)))
-                            .overlay(Capsule().strokeBorder(Color.muroInk.opacity(0.11), lineWidth: 1))
+                            .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.11), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -626,11 +627,11 @@ struct AutomationEditorView: View {
             .frame(height: 36, alignment: .leading)
         } actions: {
             if !isNew {
-                DangerPill(title: "删除") { confirmingDelete = true }
+                DangerPill(title: L("Delete")) { confirmingDelete = true }
             }
-            GhostPill(title: "取消") { dismiss() }
+            GhostPill(title: L("Cancel")) { dismiss() }
             PrimaryPill(
-                title: isNew ? "创建自动化" : "保存",
+                title: isNew ? L("Create Automation") : L("Save"),
                 enabled: canSave,
                 returnKeyEnabled: customFor == nil
             ) { save() }
@@ -638,17 +639,17 @@ struct AutomationEditorView: View {
     }
 
     private var summaryLine: String {
-        guard !steps.isEmpty else { return "选择此自动化要使用的壁纸" }
+        guard !steps.isEmpty else { return L("Pick the wallpapers this automation should use") }
         if mode == .timer {
             let total = steps.reduce(0) { $0 + $1.duration }
-            return "共 \(steps.count) 张壁纸，循环时长 \(durationLabel(total))"
+            return LN("Cycle: %2$@ across %1$@ wallpapers", steps.count, durationLabel(total))
         }
         let covered = 1440 - draft.uncoveredWindows.reduce(0) { total, gap in
             total + (gap.end > gap.start ? gap.end - gap.start : gap.end + 1440 - gap.start)
         }
         return covered >= 1440
-            ? "共 \(steps.count) 张壁纸，覆盖全天"
-            : "共 \(steps.count) 张壁纸，覆盖 \(durationLabel(covered * 60))"
+            ? LN("Covers the whole day across %@ wallpapers", steps.count)
+            : LN("Covers %2$@ of the day across %1$@ wallpapers", steps.count, durationLabel(covered * 60))
     }
 
     /// Gaps are allowed on purpose, so they are stated rather than blocked:
@@ -659,19 +660,20 @@ struct AutomationEditorView: View {
         guard mode == .clock, !steps.isEmpty else { return nil }
         let gaps = draft.uncoveredWindows
         guard let first = gaps.first else { return nil }
-        let text = "\(clockLabel(first.start)) 至 \(clockLabel(first.end)) 未安排壁纸"
+        let from = clockLabel(first.start), to = clockLabel(first.end)
         return gaps.count > 1
-            ? "\(text)，另有 \(gaps.count - 1) 段空白时段。届时保持当前壁纸。"
-            : "\(text)。届时保持当前壁纸。"
+            ? LN("%2$@ to %3$@ is not covered, and %1$@ other gaps. Whatever is playing stays.",
+                 gaps.count - 1, from, to)
+            : L("%@ to %@ is not covered. Whatever is playing stays.", from, to)
     }
 
     /// Always present, so the footer keeps its height.
     private var secondLine: String {
         if let warningLine { return warningLine }
-        if steps.isEmpty { return "至少选择一张壁纸以开始。" }
+        if steps.isEmpty { return L("Pick at least one to get started.") }
         return mode == .timer
-            ? "播放结束后从第一张壁纸重新循环。"
-            : "每天重复此计划。"
+            ? L("It loops back to the first wallpaper and starts again.")
+            : L("The same schedule repeats every day.")
     }
 
     private var draft: Automation {
@@ -736,7 +738,7 @@ struct TimeChip: View {
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .strokeBorder(
-                    focused ? Color.muroAccent.opacity(0.45) : Color.muroInk.opacity(0.14),
+                    focused ? Color.muroAccent.opacity(0.45) : Color.muroRim.opacity(0.14),
                     lineWidth: 1
                 )
         )
@@ -770,7 +772,7 @@ struct DurationStepper: View {
             MenuButton(width: 160, align: .center) {
                 presets.map { value in
                     MenuOption(title: durationLabel(value), checked: seconds == value) { seconds = value }
-                } + [.divider, MenuOption(title: "自定义") { onCustom() }]
+                } + [.divider, MenuOption(title: L("Custom")) { onCustom() }]
             } label: {
                 HStack(spacing: 6) {
                     Text(durationLabel(seconds))
@@ -792,7 +794,7 @@ struct DurationStepper: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .strokeBorder(Color.muroInk.opacity(0.14), lineWidth: 1)
+                .strokeBorder(Color.muroRim.opacity(0.14), lineWidth: 1)
         )
     }
 
@@ -836,16 +838,17 @@ struct CustomDurationPicker: View {
 
     var body: some View {
         CustomValueCard(
-            title: "自定义时长",
+            title: L("Custom duration"),
             amount: $amount,
-            applyLabel: "设为 \(durationLabel(resolved))",
+            applyLabel: L("Set %@", durationLabel(resolved)),
             // Wider than the playlist's card because this one has three units
             // rather than two, and at 272 the row filled the card edge to edge
             // and could not look centred however it was aligned.
             width: 300
         ) {
             PillSegments(
-                options: [PillOption("1", "秒"), PillOption("60", "分钟"), PillOption("3600", "小时")],
+                options: [PillOption("1", L("sec")), PillOption("60", L("min")), PillOption("3600", L("hr"))],
+                picker: true,
                 selection: $unit,
                 height: 32,
                 labelSize: 12,

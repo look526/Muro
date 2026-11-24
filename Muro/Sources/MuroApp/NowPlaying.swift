@@ -16,9 +16,9 @@ enum SchedulePlace: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .desktop: return "桌面"
-        case .lockScreen: return "锁屏"
-        case .screenSaver: return "屏幕保护"
+        case .desktop: return L("Desktop")
+        case .lockScreen: return L("Lock screen")
+        case .screenSaver: return L("Screen saver")
         }
     }
 
@@ -26,9 +26,9 @@ enum SchedulePlace: String, CaseIterable, Identifiable {
     /// beside its name: "On lock + saver".
     var shortTitle: String {
         switch self {
-        case .desktop: return "桌面"
-        case .lockScreen: return "锁屏"
-        case .screenSaver: return "屏幕保护"
+        case .desktop: return L("desktop", ctx: "short")
+        case .lockScreen: return L("lock", ctx: "short")
+        case .screenSaver: return L("saver", ctx: "short")
         }
     }
 }
@@ -45,8 +45,8 @@ extension AppStore {
     func playingLabel(for schedule: ScheduleRef) -> String? {
         let playing = places(playing: schedule)
         guard !playing.isEmpty else { return nil }
-        if playing.count == SchedulePlace.allCases.count { return "正在所有位置播放" }
-        return "正在播放：" + playing.map { $0.title.uppercased() }.joined(separator: " + ")
+        if playing.count == SchedulePlace.allCases.count { return L("PLAYING EVERYWHERE") }
+        return L("PLAYING ON %@", playing.map { $0.title.uppercased() }.joined(separator: " + "))
     }
 
     /// What a place's row says it is playing.
@@ -59,12 +59,12 @@ extension AppStore {
     /// it. One playing somewhere else says where, in short words, and one
     /// playing on every place says Everywhere, like the card's chip.
     func placeMenu(for place: SchedulePlace) -> [MenuOption] {
-        var options = [MenuOption(title: "关闭", checked: nowPlaying[place] == nil) { [weak self] in
+        var options = [MenuOption(title: L("Off"), checked: nowPlaying[place] == nil) { [weak self] in
             self?.stopPlaying(on: place)
         }]
         guard !playlists.isEmpty || !automations.isEmpty else {
             options.append(.divider)
-            options.append(MenuOption(title: "暂无播放列表或自动化"))
+            options.append(MenuOption(title: L("No playlists or automations yet")))
             return options
         }
         func option(_ schedule: ScheduleRef, title: String) -> MenuOption {
@@ -76,20 +76,20 @@ extension AppStore {
                 title: title,
                 checked: here,
                 detail: everywhere
-                    ? "所有位置"
-                    : (elsewhere.isEmpty ? nil : "正在播放：" + elsewhere.map(\.shortTitle).joined(separator: " + "))
+                    ? L("Everywhere")
+                    : (elsewhere.isEmpty ? nil : L("On %@", elsewhere.map(\.shortTitle).joined(separator: " + ")))
             ) { [weak self] in
                 here ? self?.stopPlaying(on: place) : self?.play(schedule, on: place)
             }
         }
         if !playlists.isEmpty {
             options.append(.divider)
-            options.append(.header("播放列表"))
+            options.append(.header(L("PLAYLISTS")))
             options += playlists.map { option(.playlist($0.id), title: $0.name) }
         }
         if !automations.isEmpty {
             options.append(.divider)
-            options.append(.header("自动化"))
+            options.append(.header(L("AUTOMATIONS")))
             options += automations.map { option(.automation($0.id), title: $0.name) }
         }
         return options
@@ -109,7 +109,7 @@ struct NowPlayingBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("正在播放")
+            SectionLabel(L("NOW PLAYING"))
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(store.schedulePlaces) { place in
                     NowPlayingTile(place: place)
@@ -131,14 +131,13 @@ private struct NowPlayingTile: View {
                 // The top bar's white glass bubble, glyph glow included, so
                 // the three places read as the app's own controls.
                 PlaceGlyph(place: place, size: 17)
-                    .shadow(color: .white.opacity(0.45), radius: 3)
                     .bubbleSurface(size: 34, tint: .white)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.title.uppercased())
                         .font(.system(size: 9.5, weight: .semibold))
                         .tracking(1.1)
                         .foregroundStyle(Color.muroSecondary)
-                    Text(store.nowPlayingName(on: place) ?? "关闭")
+                    Text(store.nowPlayingName(on: place) ?? L("Off"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(
                             store.nowPlaying[place] == nil ? Color.muroSecondary : Color.muroInk
@@ -159,7 +158,7 @@ private struct NowPlayingTile: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.muroInk.opacity(hovering ? 0.18 : 0.12), lineWidth: 1)
+                    .strokeBorder(Color.muroRim.opacity(hovering ? 0.18 : 0.12), lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 18))
             .onHover { hovering = $0 }

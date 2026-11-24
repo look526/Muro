@@ -91,9 +91,10 @@ struct ThumbImage: View {
     @Environment(\.inGallery) private var inGallery
 
     private var localPath: String? {
-        item.isImage && maxPixels > ImageCache.gridPixels
-            ? store.mediaURL(for: item)?.path
-            : store.thumbnailPath(for: item)
+        if item.isImage, maxPixels > ImageCache.gridPixels, let url = store.mediaURL(for: item) {
+            return url.path
+        }
+        return store.thumbnailPath(for: item)
     }
 
     var body: some View {
@@ -245,7 +246,7 @@ struct TopBar: View {
                 Text("Muro")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(ink)
-                CreditLink(text: "作者：\(Credits.name)")
+                CreditLink(text: L("made by %@", Credits.name))
             }
         }
     }
@@ -254,14 +255,19 @@ struct TopBar: View {
         HStack(spacing: 2) {
             ForEach(AppStore.Tab.allCases) { tab in
                 let selected = store.tab == tab
-                Text(tab.rawValue)
+                Text(tab.title)
                     .font(.system(size: 13, weight: selected ? .semibold : .medium))
-                    .foregroundStyle(selected ? (onMedia ? Color.black : Color.muroOnInk) : ink.opacity(0.85))
+                    .foregroundStyle(selected
+                        ? (onMedia ? Color.white : Color.muroOnNavSelected)
+                        : ink.opacity(0.85))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 9)
                     .background {
                         if selected {
-                            Capsule().fill(ink)
+                            // The soft grey of a selected toolbar segment
+                            // (Calendar's Day/Week/Month), and a white wash of
+                            // the same weight over the video.
+                            Capsule().fill(onMedia ? Color.white.opacity(0.22) : Color.muroNavSelected)
                                 .matchedGeometryEffect(id: "navTab", in: navNS)
                         }
                     }
@@ -270,10 +276,15 @@ struct TopBar: View {
                         store.switchTab(tab)
                         store.previewItem = nil
                     }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction {
+                        store.switchTab(tab)
+                        store.previewItem = nil
+                    }
             }
         }
         .padding(5)
-        .glassCapsule(fill: 0.08, stroke: 0.14)
+        .modifier(NavTrack())
         .animation(.easeOut(duration: 0.22), value: store.tab)
     }
 
@@ -289,7 +300,7 @@ struct TopBar: View {
                 systemName: "magnifyingglass",
                 glyphScale: 0.42,
                 active: store.searchActive,
-                help: "搜索壁纸"
+                help: L("Search wallpapers")
             ) {
                 if store.searchActive {
                     store.searchActive = false
@@ -306,7 +317,7 @@ struct TopBar: View {
                 systemName: "gearshape",
                 glyphScale: 0.44,
                 turns: true,
-                help: "设置"
+                help: L("Settings")
             ) {
                 openSettingsWindow()
             }
@@ -329,7 +340,7 @@ extension TopBar {
             glyphScale: 0.44,
             active: store.whatsNewOpen,
             badged: update,
-            help: update ? "Muro 有新版本可用" : "Muro 更新内容"
+            help: update ? L("A new version of Muro is available") : L("What's New in Muro")
         ) {
             store.whatsNewOpen = true
             store.markUpdateSeen()
@@ -366,7 +377,7 @@ struct UpdateCallout: View {
             HStack(spacing: 9) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                Text("有新版本可用")
+                Text(L("New update available"))
                     .font(.system(size: 12.5, weight: .semibold))
                     .fixedSize()
                 Button(action: dismiss) {
@@ -376,13 +387,13 @@ struct UpdateCallout: View {
                 }
                 .buttonStyle(.plain)
             }
-            .foregroundStyle(Color.muroInk)
+            .foregroundStyle(Color.muroOnAccent)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 Capsule().fill(Color.muroAccent.opacity(hovering ? 0.98 : 0.9))
             )
-            .overlay(Capsule().strokeBorder(Color.muroInk.opacity(0.22), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Color.muroRim.opacity(0.22), lineWidth: 1))
             .shadow(color: Color.muroGlow.opacity(0.45), radius: 14, y: 5)
         }
         .contentShape(Rectangle())
@@ -393,6 +404,50 @@ struct UpdateCallout: View {
         .offset(y: visible ? 0 : -6)
         .animation(.spring(response: 0.42, dampingFraction: 0.72), value: visible)
         .allowsHitTesting(visible)
+    }
+}
+
+/// On Home: once the page has scrolled up under the top bar, what passes
+/// beneath it blurs and fades into the window, the way content does under
+/// the toolbar of Apple's own apps. Before, the wallpapers ran straight up
+/// behind the logo and the tabs.
+struct TopBarBackdrop: View {
+    @EnvironmentObject var store: AppStore
+
+    private var shown: Bool {
+        store.tab == .home && !store.heroUnderTopBar
+    }
+
+    var body: some View {
+        ZStack {
+            if shown {
+                ZStack {
+                    Rectangle().fill(.regularMaterial)
+                    Color.sysWindow.opacity(0.55)
+                }
+                .mask(LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.6),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom))
+                .frame(height: 104)
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.2), value: shown)
+    }
+}
+
+/// The top bar's tab track: the liquid glass Apple's toolbars sit on
+/// (Calendar, Activity Monitor), which also turns darker by itself over
+/// Home's playing banner.
+private struct NavTrack: ViewModifier {
+    func body(content: Content) -> some View {
+        content.appleGlass(Capsule())
     }
 }
 
@@ -424,7 +479,6 @@ struct ImportButton: View {
             // White here, accent in the Library. Same bubble, but the top bar
             // is chrome and the Library's is the page's own call to action.
             PlusGlyph(span: size * 0.36, thickness: size * 0.054, colour: onMedia ? .white : Color.muroInk)
-                .shadow(color: Color.white.opacity(0.45), radius: hovering ? 5 : 3)
         }
         .buttonStyle(BubbleButtonStyle(size: size, hovering: hovering, active: false, tint: .white))
         // An import shows on every tab, not only in the Library where its
@@ -445,10 +499,10 @@ struct ImportButton: View {
             }
         }
         .onHover { hovering = $0 }
-        .help(store.importStatus ?? "导入图片或视频")
+        .help(store.importStatus ?? L("Import a picture, video or interactive wallpaper", ctx: "fork"))
         .fileImporter(
             isPresented: $showImporter,
-            allowedContentTypes: [.image, .movie, .mpeg4Movie, .quickTimeMovie],
+            allowedContentTypes: [.image, .movie, .mpeg4Movie, .quickTimeMovie, .html, .folder],
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result { store.importFiles(urls) }
@@ -514,13 +568,14 @@ func showMainWindow() {
         // keyboard has to wait for it. `openWindow` has already put it in
         // front, this is only insurance.
         DispatchQueue.main.async {
-            if let window = mainWindow { GallerySize.openAtOpeningSize(window) }
+            if let window = mainWindow, !AppStore.shared.welcomeActive { GallerySize.openAtOpeningSize(window) }
             mainWindow?.makeKeyAndOrderFront(nil)
         }
         return
     }
     // Only when it opens: a window already on screen keeps the size it has.
-    if !window.isVisible { GallerySize.openAtOpeningSize(window) }
+    // The first launch's welcome sets the window's size itself.
+    if !window.isVisible, !AppStore.shared.welcomeActive { GallerySize.openAtOpeningSize(window) }
     window.makeKeyAndOrderFront(nil)
 }
 
@@ -841,6 +896,10 @@ private struct GlassMenuRow: View {
     var dismiss: () -> Void
     @State private var hovering = false
 
+    /// The row under the pointer turns the accent with white words, the way
+    /// every macOS menu highlights. A checked row is marked by its tick alone.
+    private var highlighted: Bool { hovering }
+
     var body: some View {
         Button {
             dismiss()
@@ -850,13 +909,14 @@ private struct GlassMenuRow: View {
                 if let icon = option.icon {
                     Image(nsImage: icon)
                         .renderingMode(.template)
-                        .foregroundStyle(Color.muroInk.opacity(0.92))
+                        .foregroundStyle(highlighted ? Color.white : Color.muroInk.opacity(0.92))
                         .frame(width: 18, height: 18)
                         .padding(.trailing, 2)
                 }
                 Text(option.title)
                     .font(.system(size: 12.5, weight: option.checked ? .semibold : .medium))
-                    .foregroundStyle(option.destructive ? Color.muroDanger : Color.muroInk.opacity(0.92))
+                    .foregroundStyle(highlighted ? Color.white
+                        : (option.destructive ? Color.muroDanger : Color.muroInk.opacity(0.92)))
                     // Beside grey words the name keeps its room and the words
                     // shorten first. A row without them is laid out as before.
                     .lineLimit(option.detail == nil ? nil : 1)
@@ -865,29 +925,29 @@ private struct GlassMenuRow: View {
                 if let detail = option.detail {
                     Text(detail)
                         .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Color.muroSecondary)
+                        .foregroundStyle(highlighted ? Color.white.opacity(0.8) : Color.muroSecondary)
                         .lineLimit(1)
                 }
                 if option.checked {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.muroAccent)
+                        .foregroundStyle(highlighted ? Color.white : Color.muroAccent)
                 }
             }
             .padding(.horizontal, 12)
             .frame(height: 34)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(
-                        option.destructive
-                            ? Color.muroDanger.opacity(hovering ? 0.12 : 0)
-                            : Color.muroInk.opacity(hovering || option.checked ? 0.10 : 0)
-                    )
+                    .fill(rowFill)
             )
             .contentShape(RoundedRectangle(cornerRadius: 11))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+
+    private var rowFill: Color {
+        hovering ? (option.destructive ? Color.muroDanger : Color.sysAccent) : .clear
     }
 }
 
@@ -921,17 +981,21 @@ struct CapsuleSegments: View {
                 let selected = selection == option.tag
                 Text(option.label)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(selected ? Color.muroOnInk : Color.muroInk.opacity(0.7))
+                    .foregroundStyle(selected ? Color.muroOnPicked : Color.muroInk.opacity(0.7))
                     .padding(.horizontal, 13)
                     .padding(.vertical, 5.5)
                     .background {
                         if selected {
-                            Capsule().fill(Color.muroInk)
+                            Capsule().fill(Color.muroPicked)
                                 .matchedGeometryEffect(id: "seg", in: ns)
                         }
                     }
                     .contentShape(Capsule())
                     .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.16)) { selection = option.tag }
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction {
                         withAnimation(.easeOut(duration: 0.16)) { selection = option.tag }
                     }
             }
@@ -1014,7 +1078,7 @@ struct FPSChip: View {
 
 struct NewBadge: View {
     var body: some View {
-        Text("新增")
+        Text(L("NEW"))
             .font(.system(size: 9, weight: .bold))
             .tracking(1)
             .foregroundStyle(Color.muroOnAccent)
@@ -1024,10 +1088,60 @@ struct NewBadge: View {
     }
 }
 
+/// Marks an interactive wallpaper on its card, wherever cards are shown, so
+/// it can be told from a live wallpaper before it is opened (issue #59).
+struct InteractiveBadge: View {
+    var body: some View {
+        HStack(spacing: 4.5) {
+            Image(systemName: "cursorarrow.rays")
+                .font(.system(size: 8.5, weight: .bold))
+            Text(L("INTERACTIVE"))
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.9)
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white.opacity(0.95))
+        .padding(.leading, 8)
+        .padding(.trailing, 9.5)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.black.opacity(0.45)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+    }
+}
+
+/// Who made an interactive wallpaper, in the top corner of its page in the
+/// gallery. The same small dark tag as `InteractiveBadge`, and only a label:
+/// nothing happens when it is clicked, and it is never on a card or on the
+/// desktop once the wallpaper is applied.
+struct CreditBadge: View {
+    let author: String
+
+    var body: some View {
+        HStack(spacing: 4.5) {
+            Image(systemName: "person.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(L("By %@", author))
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(0.3)
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white.opacity(0.95))
+        .padding(.leading, 8)
+        .padding(.trailing, 9.5)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.black.opacity(0.45)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+        .fixedSize()
+    }
+}
+
 struct HeartButton: View {
     @EnvironmentObject var store: AppStore
     let item: WallpaperItem
     var size: CGFloat = 30
+    /// On Home's banner, beside View Wallpaper: on Light and Dark it is the
+    /// same Liquid Glass as that button. On cards it keeps its dark circle.
+    var glass = false
 
     var body: some View {
         Button {
@@ -1037,9 +1151,21 @@ struct HeartButton: View {
                 .font(.system(size: size * 0.42, weight: .medium))
                 .foregroundStyle(item.liked ? Color(hex: 0xFF6B6B) : .white)
                 .frame(width: size, height: size)
-                .background(Circle().fill(Color.black.opacity(0.4)))
+                .modifier(HeartSurface(glass: glass))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct HeartSurface: ViewModifier {
+    var glass: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if glass {
+            content.appleGlass(Circle(), interactive: true)
+        } else {
+            content.background(Circle().fill(Color.black.opacity(0.4)))
+        }
     }
 }
 
@@ -1081,7 +1207,7 @@ struct DeleteButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
-        .help("删除壁纸")
+        .help(L("Delete wallpaper"))
     }
 }
 
@@ -1173,7 +1299,7 @@ struct WallpaperCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(
-                        isSelected ? Color.muroAccent.opacity(0.85) : Color.muroInk.opacity(0.07),
+                        isSelected ? Color.muroAccent.opacity(0.85) : Color.muroRim.opacity(0.07),
                         lineWidth: isSelected ? 2 : 1
                     )
             )
@@ -1211,20 +1337,22 @@ struct WallpaperCard: View {
         if item.id.hasPrefix(AppleAerials.picturePrefix) {
             guard store.canRemoveApplePicture(item), !showsDelete else { return [] }
             return [MenuOption(
-                title: "移除下载（\(formatSize(item.sizeBytes))）",
+                title: L("Remove Download (%@)", formatSize(item.sizeBytes)),
                 destructive: true
             ) { store.removeDownload(item) }]
         }
-        guard item.isDownloaded, !showsDelete else { return [] }
+        // Muro's own interactive wallpapers leave through the Library's trash,
+        // which deletes their files too.
+        guard item.isDownloaded, !showsDelete, !item.isBuiltInInteractive else { return [] }
         if item.remote == nil {
             return [MenuOption(
-                title: "删除壁纸（\(formatSize(item.sizeBytes))）",
+                title: L("Delete Wallpaper (%@)", formatSize(item.sizeBytes)),
                 destructive: true
             ) { store.requestDelete([item]) }]
         }
         if removableDownload {
             return [MenuOption(
-                title: "移除下载（\(formatSize(item.sizeBytes))）",
+                title: L("Remove Download (%@)", formatSize(item.sizeBytes)),
                 destructive: true
             ) { store.removeDownload(item) }]
         }
@@ -1235,7 +1363,10 @@ struct WallpaperCard: View {
     /// aerial macOS keeps for itself is liked like any other, but a trash can
     /// on it would do nothing. A screen saver the person added can go too.
     private var deletable: Bool {
-        !AppleAerials.isAppleID(item.id) || store.appleDownloadedIDs.contains(item.id)
+        // Muro's own interactive wallpapers: out of the Library and off the
+        // Mac. Download brings one back.
+        if item.isBuiltInInteractive { return item.isDownloaded }
+        return !AppleAerials.isAppleID(item.id) || store.appleDownloadedIDs.contains(item.id)
             || store.canDeleteScreenSaver(item.id)
     }
 
@@ -1258,10 +1389,10 @@ struct WallpaperCard: View {
         if persistentTitle || hovering {
             VStack(alignment: .leading, spacing: 2) {
                 if hovering && !persistentTitle {
-                    Text(item.categoryTitle)
+                    Text(categoryTitle(item.category).uppercased())
                         .font(.system(size: 8.5, weight: .semibold))
                         .tracking(1.2)
-                        .foregroundStyle(Color.muroAccent)
+                        .foregroundStyle(Color.muroAccentOnMedia)
                 }
                 Text(item.title)
                     .font(.system(size: 14.5, weight: .semibold))
@@ -1289,6 +1420,8 @@ struct WallpaperCard: View {
                 .padding(12)
         } else if store.isNew(item) {
             NewBadge().padding(12)
+        } else if item.isInteractive {
+            InteractiveBadge().padding(12)
         }
     }
 
@@ -1356,18 +1489,41 @@ struct CreditLink: View {
             .foregroundStyle(hovering ? Color.muroAccent : ink.opacity(0.78))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Capsule().fill((onMedia ? Color.black : Color.muroShade).opacity(0.38)))
-            .overlay(
-                Capsule().strokeBorder(
-                    hovering ? Color.muroAccent.opacity(0.45) : ink.opacity(0.14),
-                    lineWidth: 1
-                )
-            )
+            .modifier(CreditChipSurface())
             .contentShape(Capsule())
             .onHover { hovering = $0 }
             .onTapGesture { NSWorkspace.shared.open(Credits.url) }
             .help("github.com/\(Credits.name)")
             .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// The credit chip's surface: a small piece of Liquid Glass, like the rest of
+/// the top bar.
+private struct CreditChipSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.appleGlass(Capsule())
+    }
+}
+
+/// A floating control's surface: Apple's Liquid Glass. For the search field,
+/// the Select button, the filters and the small chips beside them.
+struct FloatingCapsule: ViewModifier {
+    var interactive = false
+    var tint: Color? = nil
+
+    func body(content: Content) -> some View {
+        content.appleGlass(Capsule(), interactive: interactive, tint: tint)
+    }
+}
+
+/// An accent chip ("Clear filters", "2 on this Mac"): Liquid Glass, with the
+/// accent in the words.
+struct TintedChipSurface: ViewModifier {
+    var interactive = false
+
+    func body(content: Content) -> some View {
+        content.appleGlass(Capsule(), interactive: interactive)
     }
 }
 
@@ -1382,7 +1538,7 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.muroSecondary)
-            TextField("搜索壁纸…", text: $store.searchText)
+            TextField(L("Search wallpapers…"), text: $store.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.muroInk)
@@ -1391,7 +1547,7 @@ struct SearchField: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(width: 260)
-        .glassCapsule(fill: 0.08, stroke: 0.14)
+        .modifier(FloatingCapsule())
         // The field only appears because the search button was pressed, so
         // the cursor goes straight into it. It used to wait for a click of
         // its own, and typing right after the button went nowhere (full

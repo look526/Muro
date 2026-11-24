@@ -46,22 +46,23 @@ public enum DownloadFolder {
         public var errorDescription: String? {
             switch self {
             case .notAFolder:
-                return "Muro 无法使用此文件夹。"
+                return L("That is not a folder Muro can use.")
             case .insideLibrary:
-                return "请选择当前 Muro 文件夹之外的位置。"
+                return L("Pick a folder outside the one Muro uses now.")
             case .alreadyThere:
-                return "Muro 已将壁纸保存在此处。"
+                return L("Muro already keeps your wallpapers there.")
             case .folderInUse:
-                return "此处已有「\(DownloadFolder.folderName)」文件夹且包含其他文件，请选择其他位置。"
+                return L("A folder called %@ is already there and holds other files. Pick another place.", DownloadFolder.folderName)
             case .notConnected(let name):
-                return "请先连接 \(name)，壁纸保存在该磁盘上。"
+                return L("Connect %@ first. Your wallpapers are on it.", name)
             case .notEnoughSpace(let needed, let available):
                 let format = ByteCountFormatter()
-                return "空间不足。壁纸需要 \(format.string(fromByteCount: needed))，当前可用 \(format.string(fromByteCount: available))。"
+                return L("There is not enough space there. Your wallpapers need %@ and %@ is free.",
+                         format.string(fromByteCount: needed), format.string(fromByteCount: available))
             case .copyFailed(let name):
-                return "无法复制「\(name)」，未移动任何文件。"
+                return L("%@ could not be copied. Nothing was moved.", name)
             case .cancelled:
-                return "移动已取消，壁纸仍保留在原位置。"
+                return L("The move was cancelled. Your wallpapers stayed where they were.")
             }
         }
     }

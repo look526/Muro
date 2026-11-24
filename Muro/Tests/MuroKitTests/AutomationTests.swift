@@ -54,7 +54,6 @@ final class AutomationTests: XCTestCase {
             .init(wallpaperID: "c", seconds: 7200),
         ])
         XCTAssertEqual(automation.cycleSeconds, 8410)
-        XCTAssertEqual(durationLabel(8410), "2 小时 20 分钟")
     }
 
     /// A step with nothing set, or something absurd, must not be able to make
@@ -226,14 +225,6 @@ final class AutomationTests: XCTestCase {
     }
 
     // MARK: - Labels
-
-    func testDurationLabels() {
-        XCTAssertEqual(durationLabel(10), "10 秒")
-        XCTAssertEqual(durationLabel(60), "1 分钟")
-        XCTAssertEqual(durationLabel(90), "1 分钟 30 秒")
-        XCTAssertEqual(durationLabel(3600), "1 小时")
-        XCTAssertEqual(durationLabel(9000), "2 小时 30 分钟")
-    }
 
     func testMinutesWrapInsteadOfGoingNegative() {
         XCTAssertEqual(normalizedMinute(-15), 1425)

@@ -26,7 +26,11 @@ struct ConfirmDeleteView: View {
     private static let danger = Color(hex: 0xFF6B6B)
 
     private var items: [WallpaperItem] { request.items }
-    private var personal: [WallpaperItem] { items.filter { $0.remote == nil } }
+    /// The person's own videos and pages. Muro's own interactive wallpapers
+    /// have no catalog entry either, but Download puts them back any time.
+    private var personal: [WallpaperItem] {
+        items.filter { $0.remote == nil && !$0.isBuiltInInteractive }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -95,7 +99,7 @@ struct ConfirmDeleteView: View {
         HStack(spacing: 10) {
             Spacer()
             Button { dismiss() } label: {
-                Text("取消")
+                Text(L("Cancel"))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .padding(.horizontal, 18)
@@ -109,7 +113,7 @@ struct ConfirmDeleteView: View {
                 store.deleteWallpapers(items)
                 dismiss()
             } label: {
-                Text(actionWord + (items.count > 1 ? " \(items.count)" : ""))
+                Text(request.removingDownload ? LN("Remove %@", items.count) : LN("Delete %@", items.count))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
                     .padding(.horizontal, 20)
@@ -168,7 +172,7 @@ struct ConfirmDeleteView: View {
                     .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .strokeBorder(Color.muroInk.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(Color.muroRim.opacity(0.08), lineWidth: 1)
                     )
             }
             if overflow {
@@ -186,18 +190,14 @@ struct ConfirmDeleteView: View {
 
     // MARK: - Words
 
-    /// "Remove Download" opened a sheet asking "Delete this wallpaper?" (full
-    /// check, 2026-10-01). A request from that menu item keeps its words.
-    private var actionWord: String { request.removingDownload ? "移除" : "删除" }
-
     private var title: String {
         if request.removingDownload {
-            return items.count == 1 ? "移除此下载？" : "移除 \(items.count) 项下载？"
+            return LN("Remove %@ downloads?", items.count)
         }
         if onlySavers {
-            return items.count == 1 ? "删除此屏幕保护程序？" : "删除 \(items.count) 个屏幕保护程序？"
+            return LN("Delete %@ screen savers?", items.count)
         }
-        return items.count == 1 ? "删除此壁纸？" : "删除 \(items.count) 张壁纸？"
+        return LN("Delete %@ wallpapers?", items.count)
     }
 
     /// The person's own screen savers. They go to the Trash rather than for
@@ -210,9 +210,9 @@ struct ConfirmDeleteView: View {
 
     /// Said instead of the download line when screen savers are in it.
     private var saverLine: String? {
-        if onlySavers { return items.count == 1 ? "将移到废纸篓。" : "将移到废纸篓。" }
+        if onlySavers { return items.count == 1 ? L("It goes to the Trash.") : L("They go to the Trash.") }
         if !savers.isEmpty, personal.isEmpty {
-            return "屏幕保护程序将移到废纸篓，其他内容可重新下载。"
+            return L("Screen savers go to the Trash. The others you can download again.")
         }
         return nil
     }
@@ -230,17 +230,15 @@ struct ConfirmDeleteView: View {
         if let saverLine { return saverLine }
         if personal.isEmpty {
             return items.count == 1
-                ? "随时可以重新下载。"
-                : "随时可以重新下载。"
+                ? L("You can download it again any time.")
+                : L("You can download them again any time.")
         }
         if personal.count == items.count {
             return items.count == 1
-                ? "这是导入的壁纸，删除后需重新导入。原始文件不受影响。"
-                : "这些是导入的壁纸，删除后需重新导入。原始文件不受影响。"
+                ? L("This is your own video. Deleting it is permanent.")
+                : L("These are your own videos. Deleting them is permanent.")
         }
-        return personal.count == 1
-            ? "其中 1 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
-            : "其中 \(personal.count) 项是导入的壁纸，删除后需重新导入。原始文件不受影响。"
+        return LN("%@ are your own videos, and those are permanent.", personal.count)
     }
 
     /// What is currently in use, as chips rather than sentences. Two lines of
@@ -249,8 +247,8 @@ struct ConfirmDeleteView: View {
     private var notices: [String] {
         var out: [String] = []
         if let playing = playingNotice { out.append(playing) }
-        if lockScreenAffected { out.append("锁屏") }
-        if screenSaverAffected { out.append("屏幕保护程序") }
+        if lockScreenAffected { out.append(L("LOCK SCREEN")) }
+        if screenSaverAffected { out.append(L("SCREEN SAVER")) }
         return out
     }
 
@@ -266,13 +264,13 @@ struct ConfirmDeleteView: View {
             let shown = items.contains {
                 AppleAerials.isMacOSOnly($0.id) && !store.appliedPlaces(for: $0.id).isEmpty
             }
-            return shown ? "正在显示" : nil
+            return shown ? L("SHOWING NOW") : nil
         }
         let displays = store.appliedDisplays(for: first.id)
         if applied.count == 1, displays.count == 1, let display = displays.first {
-            return "正在\(friendly(display))播放"
+            return L("PLAYING ON %@", friendly(display).uppercased())
         }
-        return "正在播放"
+        return L("PLAYING NOW")
     }
 
     /// The playlists and automations a delete takes these out of. The sheet
@@ -287,10 +285,12 @@ struct ConfirmDeleteView: View {
         let list: String
         switch names.count {
         case 1: list = last
-        case 2, 3: list = names.dropLast().joined(separator: ", ") + "和" + last
-        default: list = "\(names.count) 个播放列表和自动化"
+        case 2, 3: list = listText(names)
+        default: list = LN("%@ playlists and automations", names.count)
         }
-        return "同时将从以下计划中移除：" + list + "。"
+        return items.count == 1
+            ? L("It also comes out of %@.", list)
+            : L("They also come out of %@.", list)
     }
 
     private var lockScreenAffected: Bool {

@@ -194,7 +194,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Over the playing wallpaper, so these keep the dark look's
             // colours whatever the look is (6.0).
-            Text("精选")
+            Text(L("FEATURED"))
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(2.4)
                 .foregroundStyle(Color.muroAccentOnMedia)
@@ -206,9 +206,9 @@ struct HomeView: View {
                 Text(item.metaLine)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondaryOnMedia)
-                FPSChip(text: item.fps > 40 ? "\(standardFrameRate(item.fps)) 帧/秒" : "\(item.resolutionLabel) · \(standardFrameRate(item.fps))")
+                FPSChip(text: item.fps > 40 ? L("%@ FPS", standardFrameRate(item.fps)) : "\(item.resolutionLabel) · \(standardFrameRate(item.fps))")
                 if let label = store.appliedChipLabel(for: item.id) {
-                    AppliedChip(label: "已应用 · " + label)
+                    AppliedChip(label: L("APPLIED · %@", label))
                 }
             }
             .padding(.top, 14)
@@ -217,7 +217,7 @@ struct HomeView: View {
                     store.openPreview(item)
                 } label: {
                     HStack(spacing: 8) {
-                        Text("查看壁纸")
+                        Text(L("View Wallpaper"))
                             .font(.system(size: 13, weight: .semibold))
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 11, weight: .semibold))
@@ -225,10 +225,10 @@ struct HomeView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 12)
-                    .glassCapsule(fill: 0.12, stroke: 0.2)
+                    .modifier(FloatingCapsule(interactive: true))
                 }
                 .buttonStyle(.plain)
-                HeartButton(item: item, size: 44)
+                HeartButton(item: item, size: 44, glass: true)
             }
             .padding(.top, 20)
         }
@@ -239,10 +239,10 @@ struct HomeView: View {
             Image(systemName: "sparkles.rectangle.stack")
                 .font(.system(size: 42))
                 .foregroundStyle(Color.muroSecondary)
-            Text("资源库为空")
+            Text(L("Your library is empty"))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
-            Text("点击 + 导入视频，或前往「探索」下载壁纸。")
+            Text(L("Import your own videos with the + button, or browse Explore to download wallpapers."))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
         }
@@ -286,8 +286,8 @@ struct HomeView: View {
     /// place to find what is new long after the badges have gone.
     private var dropSection: some View {
         cardRow(
-            title: "最新动态壁纸",
-            subtitle: "新近上架的壁纸",
+            title: L("New Live Wallpapers"),
+            subtitle: L("The latest wallpapers added to the catalog"),
             items: dropItems,
             page: $dropPage,
             shift: $dropShift
@@ -300,8 +300,8 @@ struct HomeView: View {
     /// random draw.
     private var pickSection: some View {
         cardRow(
-            title: "Muro 精选",
-            subtitle: "每天精选 12 款不同壁纸",
+            title: L("Muro's Pick"),
+            subtitle: L("A different twelve every day"),
             items: pickItems,
             page: $pickPage,
             shift: $pickShift
@@ -389,7 +389,7 @@ struct HomeView: View {
 /// scrolls exactly as before; it only no longer stretches.
 ///
 /// A probe inside the scrolling content that finds the `NSScrollView` SwiftUI
-/// made, like `ScrollViewFinder`, and never takes a click.
+/// made, and never takes a click.
 private struct NoOverscroll: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Probe() }
     func updateNSView(_ nsView: NSView, context: Context) {}

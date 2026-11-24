@@ -29,12 +29,12 @@ struct ExploreView: View {
     /// Real values present in the catalog/library — the dropdowns only
     /// offer resolutions and frame rates that actually exist.
     private var resolutionOptions: [String] {
-        let present = Set(store.exploreItems.map(\.resolutionLabel))
+        let present = Set(store.exploreItems.filter { !$0.isInteractive }.map(\.resolutionLabel))
         return ["4K", "1440p", "1080p"].filter(present.contains)
     }
 
     private var fpsOptions: [String] {
-        Set(store.exploreItems.map { "\(standardFrameRate($0.fps))" })
+        Set(store.exploreItems.filter { !$0.isInteractive }.map { "\(standardFrameRate($0.fps))" })
             .sorted { (Int($0) ?? 0) > (Int($1) ?? 0) }
     }
 
@@ -45,12 +45,16 @@ struct ExploreView: View {
     private var filtered: [WallpaperItem] {
         store.exploreItems.filter { item in
             if category != "All", item.category != category { return false }
+            // An interactive wallpaper has no resolution or frame rate: it is
+            // drawn at the screen's own. A filter on either leaves it out.
+            if narrowed, item.isInteractive { return false }
             if resolution != "All", item.resolutionLabel != resolution { return false }
             if fps != "All", "\(standardFrameRate(item.fps))" != fps { return false }
             if !store.searchText.isEmpty,
                !item.title.localizedCaseInsensitiveContains(store.searchText),
+               !item.originalTitle.localizedCaseInsensitiveContains(store.searchText),
                !item.category.localizedCaseInsensitiveContains(store.searchText),
-               !item.categoryTitle.localizedCaseInsensitiveContains(store.searchText) {
+               !categoryTitle(item.category).localizedCaseInsensitiveContains(store.searchText) {
                 return false
             }
             return true
@@ -82,7 +86,7 @@ struct ExploreView: View {
                     // Overlaid in a ZStack, so the two pass through each other
                     // in place while the transition runs.
                     ZStack {
-                        ScrollView(.vertical, showsIndicators: false) {
+                        GlassScrollView(fadeTop: 22, fadeBottom: 46) {
                             Group {
                                 if filtered.isEmpty {
                                     emptyState
@@ -97,7 +101,6 @@ struct ExploreView: View {
                             .padding(.top, 22)
                             .padding(.bottom, 40)
                         }
-                        .scrollFade(top: 22, bottom: 46)
                         .id(filterKey)
                         .transition(.muroPage(shift: categoryShift))
                     }
@@ -119,7 +122,7 @@ struct ExploreView: View {
     // MARK: - Categories
 
     private var categoryOptions: [PillOption] {
-        [PillOption("All", "全部")] + store.categories.map { PillOption($0, ChineseUI.name($0)) }
+        [PillOption("All", L("All", ctx: "filter"))] + store.categories.map { PillOption($0, categoryTitle($0)) }
     }
 
     private var categorySegments: some View {
@@ -178,13 +181,13 @@ struct ExploreView: View {
             Spacer(minLength: 12)
             if narrowed { clearFilters }
             FilterDropdown(
-                title: "分辨率",
+                title: L("Resolution"),
                 value: resolution,
                 width: 190,
                 options: { pickOptions(all: resolutionOptions, selection: resolution) { resolution = $0 } }
             )
             FilterDropdown(
-                title: "帧率",
+                title: L("FPS"),
                 value: fps,
                 width: 160,
                 options: { pickOptions(all: fpsOptions, selection: fps) { fps = $0 } }
@@ -196,9 +199,9 @@ struct ExploreView: View {
 
     private var countLine: String {
         let count = filtered.count
-        let noun = count == 1 ? "壁纸" : "壁纸"
-        if category == "All" { return "\(count) 张壁纸" }
-        return "\(ChineseUI.name(category)) · \(count) 张壁纸"
+        if category == "All" { return LN("%@ wallpapers", count) }
+        if category == InteractiveWallpapers.category { return LN("%@ interactive wallpapers", count) }
+        return LN("%@ wallpapers in %@", count, categoryTitle(category))
     }
 
     private var clearFilters: some View {
@@ -209,14 +212,13 @@ struct ExploreView: View {
             HStack(spacing: 6) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9.5, weight: .semibold))
-                Text("清除筛选")
+                Text(L("Clear filters"))
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundStyle(Color.muroAccent)
             .padding(.horizontal, 14)
             .frame(height: 42)
-            .background(Capsule().fill(Color.muroAccent.opacity(0.13)))
-            .overlay(Capsule().strokeBorder(Color.muroAccent.opacity(0.28), lineWidth: 1))
+            .modifier(TintedChipSurface(interactive: true))
         }
         .buttonStyle(.plain)
         .transition(.opacity.combined(with: .scale(scale: 0.94)))
@@ -226,7 +228,8 @@ struct ExploreView: View {
         all: [String], selection: String, choose: @escaping (String) -> Void
     ) -> [MenuOption] {
         (["All"] + all).map { value in
-            MenuOption(title: ChineseUI.name(value), checked: selection == value) { choose(value) }
+            MenuOption(title: value == "All" ? L("All", ctx: "filter") : value,
+                       checked: selection == value) { choose(value) }
         }
     }
 
@@ -272,7 +275,7 @@ struct ExploreView: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(Color.muroAccent)
-            Text("正在加载壁纸…")
+            Text(L("Loading wallpapers…"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
         }
@@ -302,12 +305,12 @@ struct ExploreView: View {
     private var noMatchesState: some View {
         VStack(spacing: 12) {
             emptyIcon("sparkle.magnifyingglass")
-            Text("没有匹配的内容")
+            Text(L("Nothing matches that"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
             Text(store.searchText.isEmpty
-                 ? "请尝试其他分类，或放宽分辨率和帧率筛选条件。"
-                 : "没有找到「\(store.searchText)」，请尝试其他关键词。")
+                 ? L("Try another category, or widen the resolution and frame rate.")
+                 : L("No wallpaper called %@. Try another word.", store.searchText))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -331,7 +334,7 @@ struct ExploreView: View {
                     Text(problem.title)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Color.muroInk)
-                    Text("当前仅显示已下载的壁纸。")
+                    Text(L("Only the wallpapers you have already downloaded are showing."))
                         .font(.system(size: 11.5))
                         .foregroundStyle(Color.muroSecondary)
                 }
@@ -347,7 +350,7 @@ struct ExploreView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.muroInk.opacity(0.13), lineWidth: 1)
+                    .strokeBorder(Color.muroRim.opacity(0.13), lineWidth: 1)
             )
         }
     }
@@ -365,14 +368,13 @@ struct ExploreView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                 }
-                Text(store.catalogRefreshing ? "正在检查…" : "重试")
+                Text(store.catalogRefreshing ? L("Checking…") : L("Try Again"))
                     .font(.system(size: 12.5, weight: .semibold))
             }
             .foregroundStyle(Color.muroAccent)
             .padding(.horizontal, 18)
             .frame(height: 40)
             .background(Capsule().fill(Color.muroAccent.opacity(0.13)))
-            .overlay(Capsule().strokeBorder(Color.muroAccent.opacity(0.28), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(store.catalogRefreshing)
@@ -384,7 +386,7 @@ struct ExploreView: View {
             .foregroundStyle(Color.muroAccent)
             .frame(width: 54, height: 54)
             .background(Circle().fill(.glassSheen(0.14, 0.05)))
-            .overlay(Circle().strokeBorder(Color.muroInk.opacity(0.16), lineWidth: 1))
+            .overlay(Circle().strokeBorder(Color.muroRim.opacity(0.16), lineWidth: 1))
     }
 
     private func symbol(for problem: CatalogError) -> String {
@@ -393,6 +395,14 @@ struct ExploreView: View {
         case .server: return "exclamationmark.icloud"
         case .unreadable: return "exclamationmark.shield"
         }
+    }
+}
+
+/// A filter button's surface: Apple's Liquid Glass button. The value in the
+/// accent says a filter is set.
+private struct FilterSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.appleGlass(Capsule(), interactive: true)
     }
 }
 
@@ -419,7 +429,7 @@ struct FilterDropdown: View {
                 Text(title)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.muroSecondary)
-                Text(ChineseUI.name(value))
+                Text(value == "All" ? L("All", ctx: "filter") : value)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(set ? Color.muroAccent : Color.muroInk)
                 Image(systemName: "chevron.down")
@@ -430,14 +440,7 @@ struct FilterDropdown: View {
             .fixedSize()
             .padding(.horizontal, 18)
             .frame(height: 42)
-            .background(Capsule().fill(.glassSheen(hovering ? 0.14 : 0.10, hovering ? 0.06 : 0.045)))
-            .overlay(
-                Capsule().strokeBorder(
-                    set ? Color.muroAccent.opacity(0.35) : Color.muroInk.opacity(hovering ? 0.2 : 0.13),
-                    lineWidth: 1
-                )
-            )
-            .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 3)
+            .modifier(FilterSurface())
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.16), value: hovering)
         }

@@ -44,6 +44,28 @@ final class AppleAerialModel: ObservableObject {
                 self.aerials = found
                 self.loaded = true
                 if let found { AppleAerialFetcher.shared.prefetchSizes(for: found) }
+                if let found { self.fillMissingAddresses(found) }
+            }
+        }
+    }
+
+    /// Set while Apple's public picture catalogue is being fetched, and after
+    /// it arrived, so it is fetched once a session.
+    private static var askedApple = false
+
+    /// A Mac without macOS's own picture catalogue lists Apple's still
+    /// pictures with no address and no size (issue #53). Apple's public copy
+    /// is fetched, and the list read again with it. Offline, the next load
+    /// asks again, and Download asks by itself.
+    private func fillMissingAddresses(_ found: [AppleAerial]) {
+        guard !Self.askedApple, found.contains(where: DynamicWallpapers.lacksAddress) else { return }
+        Self.askedApple = true
+        Task {
+            do {
+                try await DynamicWallpapers.fetchPublicCatalog()
+                load()
+            } catch {
+                Self.askedApple = false
             }
         }
     }
@@ -63,7 +85,7 @@ final class AppleAerialModel: ObservableObject {
         (aerials ?? []).filter { saver in
             saver.category == AppleScreenSaverVideos.category
                 && (search.isEmpty || saver.name.localizedCaseInsensitiveContains(search)
-                    || ChineseUI.name(saver.name).localizedCaseInsensitiveContains(search))
+                    || ChineseUI.localizedName(saver.name).localizedCaseInsensitiveContains(search))
         }
     }
 
@@ -82,8 +104,8 @@ final class AppleAerialModel: ObservableObject {
             if !search.isEmpty,
                !aerial.name.localizedCaseInsensitiveContains(search),
                !aerial.category.localizedCaseInsensitiveContains(search),
-               !ChineseUI.name(aerial.name).localizedCaseInsensitiveContains(search),
-               !ChineseUI.name(aerial.category).localizedCaseInsensitiveContains(search) {
+               !ChineseUI.localizedName(aerial.name).localizedCaseInsensitiveContains(search),
+               !ChineseUI.localizedName(aerial.category).localizedCaseInsensitiveContains(search) {
                 return false
             }
             return true
@@ -274,7 +296,9 @@ extension AppStore {
     /// A playlist only holds ids, and every place that plays one already
     /// finds an aerial by its id, so nothing downstream had to change.
     var scheduleItems: [WallpaperItem] {
-        localItems + downloadedAppleItems
+        // Not interactive wallpapers: a playlist can play on the lock screen
+        // and the screen saver, where those cannot go.
+        localItems.filter { !$0.isInteractive } + downloadedAppleItems
     }
 
     /// Fetches one aerial from Apple's CDN, beside Muro's own wallpapers.
@@ -332,7 +356,7 @@ extension AppStore {
                 await MainActor.run {
                     AppStore.shared.downloads[id] = nil
                     AppStore.shared.applyError =
-                        "无法从 Apple 下载此航拍壁纸。\(error.localizedDescription)"
+                        L("That aerial could not be downloaded from Apple. %@", error.localizedDescription)
                 }
             }
         }
@@ -364,7 +388,7 @@ extension AppStore {
                 try FileManager.default.copyItem(at: url, to: target)
                 added.append(name)
             } catch {
-                importError = "无法添加「\(url.lastPathComponent)」。\(error.localizedDescription)"
+                importError = L("%@ could not be added. %@", url.lastPathComponent, error.localizedDescription)
             }
         }
         if !added.isEmpty { refreshImportedScreenSavers() }
@@ -416,7 +440,7 @@ extension AppStore {
                 }
                 gone.insert(id)
             } catch {
-                applyError = "无法删除「\(saver.name)」。\(error.localizedDescription)"
+                applyError = L("%@ could not be deleted. %@", saver.name, error.localizedDescription)
             }
         }
         if recentIDs.contains(where: { gone.contains($0) }) {

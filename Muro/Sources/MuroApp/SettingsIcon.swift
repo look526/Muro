@@ -28,6 +28,16 @@ enum SettingsIcon {
     /// Menu Bar Icon (6.0): Muro's own glyph, the moon over the horizon, on
     /// a tile the colour of moonlight. Same grid and rules.
     case menuBarIcon
+    /// Live Wallpaper Sound (issue #54): a speaker with two sound waves on a
+    /// fuchsia tile no other row uses. Same grid and rules, approved from the
+    /// design shown to the owner on 2026-10-26.
+    case sound
+    /// Language (issue #62): a globe, its equator and one meridian, on the
+    /// blue macOS itself uses for language. Same grid and rules.
+    case language
+    /// Community (2026-11-13): Discord's own logo, outlined and softly filled
+    /// like every other glyph, on Discord's blurple.
+    case community
 
     /// The tile's colour. Nil for the replay arrow, which has no tile.
     var tint: Color? {
@@ -52,6 +62,9 @@ enum SettingsIcon {
         case .support: return Color(hex: 0xFF6B8E)
         case .appearance: return Color(hex: 0xB9C2D0)
         case .menuBarIcon: return Color(hex: 0xF5C451)
+        case .sound: return Color(hex: 0xE763FF)
+        case .language: return Color(hex: 0x3F9BFF)
+        case .community: return Color(hex: 0x5865F2)
         }
     }
 
@@ -78,16 +91,17 @@ enum SettingsIcon {
         case .support: return Color(hex: 0xFFB5C6)
         case .appearance: return Color(hex: 0xDCE1E8)
         case .menuBarIcon: return Color(hex: 0xFAE1A8)
+        case .sound: return Color(hex: 0xF3B1FF)
+        case .language: return Color(hex: 0x9FCDFF)
+        case .community: return Color(hex: 0xACB2F8)
         }
     }
 
-    /// The glyph's colour in each look. Default and Dark keep the tint mixed
-    /// halfway to white (on Dark the tile is graphite but the glyph keeps its
-    /// colour, owner 2026-10-02); Light puts the tint, deepened, on a white
-    /// tile.
-    func glyph(for mode: AppearanceMode) -> Color {
-        switch mode {
-        case .standard: return glyphColor
+    /// The glyph's colour in each look. Dark keeps the tint mixed halfway to
+    /// white (the tile is graphite but the glyph keeps its colour, owner
+    /// 2026-10-02); Light puts the tint, deepened, on a white tile.
+    func glyph(for look: AppearanceLook) -> Color {
+        switch look {
         case .dark: return glyphColor
         case .light: return tint.map { $0.mixed(withBlack: 0.32) } ?? Color(hex: 0x6E6E73)
         }
@@ -106,6 +120,11 @@ enum SettingsIcon {
                            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
         }
         switch self {
+        case .community:
+            // 16 wide on the 18 point grid, centred; the eyes are holes.
+            let logo = discordLogoPath(in: CGRect(x: 1, y: 1, width: 16, height: 16))
+            context.fill(logo, with: .color(color.opacity(softFillOpacity)), style: FillStyle(eoFill: true))
+            stroke(logo, width: 1.2)
         case .launchAtLogin:
             fill(circle(9, 10, 6.5), soft: true)
             stroke(Path { p in
@@ -416,6 +435,42 @@ enum SettingsIcon {
                 p.addCurve(to: pt(9, 12.85), control1: pt(4.25, 11.7), control2: pt(6.35, 13.8))
                 p.addCurve(to: pt(16.25, 13.55), control1: pt(11.65, 11.9), control2: pt(14.15, 12.05))
             })
+        case .sound:
+            // The speaker, box and cone, soft fill and outline, then two waves
+            // centred on its mouth. The whole runs 1.9 to 16.15 across and
+            // 2.85 to 15.15 down.
+            let speaker = Path { p in
+                p.move(to: pt(3.65, 6.75))
+                p.addLine(to: pt(5.65, 6.75))
+                p.addLine(to: pt(9.4, 3.6))
+                p.addLine(to: pt(9.4, 14.4))
+                p.addLine(to: pt(5.65, 11.25))
+                p.addLine(to: pt(3.65, 11.25))
+                p.addQuadCurve(to: pt(2.65, 10.25), control: pt(2.65, 11.25))
+                p.addLine(to: pt(2.65, 7.75))
+                p.addQuadCurve(to: pt(3.65, 6.75), control: pt(2.65, 6.75))
+                p.closeSubpath()
+            }
+            fill(speaker, soft: true)
+            stroke(speaker)
+            stroke(Path { p in
+                p.addArc(center: pt(9.4, 9), radius: 3.1,
+                         startAngle: .degrees(-42), endAngle: .degrees(42), clockwise: false)
+            })
+            stroke(Path { p in
+                p.addArc(center: pt(9.4, 9), radius: 6.0,
+                         startAngle: .degrees(-46), endAngle: .degrees(46), clockwise: false)
+            })
+        case .language:
+            // The globe fills the set's 2.25 to 15.75 circle. One meridian,
+            // 2.9 wide either side of the middle, and the equator across it.
+            fill(circle(9, 9, 6.75), soft: true)
+            stroke(circle(9, 9, 6.75))
+            stroke(Path(ellipseIn: CGRect(x: 6.1, y: 2.25, width: 5.8, height: 13.5)))
+            stroke(Path { p in
+                p.move(to: pt(2.25, 9))
+                p.addLine(to: pt(15.75, 9))
+            })
         }
     }
 }
@@ -425,18 +480,12 @@ struct SettingsIconView: View {
 
     var body: some View {
         // Read in the body, so the tile redraws when the look changes.
-        let mode = Appearance.shared.mode
-        let glyph = icon.glyph(for: mode)
+        let look = Appearance.shared.look
+        let glyph = icon.glyph(for: look)
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         ZStack {
             if let tint = icon.tint {
-                switch mode {
-                case .standard:
-                    shape.fill(Color(hex: 0x0C0F16))
-                    shape.fill(LinearGradient(colors: [tint.opacity(0.46), tint.opacity(0.16)],
-                                              startPoint: .top, endPoint: .bottom))
-                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.04)],
-                                                      startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                switch look {
                 case .dark:
                     // Black and white: graphite glass, no colour.
                     shape.fill(Color(hex: 0x161616))

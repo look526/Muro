@@ -74,6 +74,9 @@ struct AppleGalleryView: View {
         // Every time the section opens, until it is turned off in the card
         // itself (owner, 2026-09-30).
         .onAppear { if AppleNoticeCard.wanted { store.appleNoticeOpen = true } }
+        // Apple's names are read in the language Muro is in, so a change of
+        // language reads the list again.
+        .onChange(of: Localization.shared.language) { _, _ in model.load() }
         // A category Apple no longer ships would leave the page filtered to
         // nothing with no lit pill to say why. Explore guards the same thing.
         .onChange(of: model.categories) { _, list in
@@ -87,8 +90,8 @@ struct AppleGalleryView: View {
         ZStack {
             PillSegments(
                 options: [
-                    PillOption(Kind.aerials.rawValue, "航拍", count: model.aerialCount),
-                    PillOption(Kind.screenSavers.rawValue, "屏幕保护程序",
+                    PillOption(Kind.aerials.rawValue, L("Aerials"), count: model.aerialCount),
+                    PillOption(Kind.screenSavers.rawValue, L("Screen Savers"),
                                count: model.aerials == nil ? nil : model.screenSavers(matching: "").count)
                 ],
                 selection: Binding(
@@ -120,7 +123,7 @@ struct AppleGalleryView: View {
             // A new scroll view for each category, so every category starts
             // at its top (owner, 2026-09-30). See Explore.
             ZStack {
-                ScrollView(.vertical, showsIndicators: false) {
+                GlassScrollView(fadeTop: 20, fadeBottom: 46) {
                     Group {
                         if shown.isEmpty {
                             emptyState
@@ -132,7 +135,6 @@ struct AppleGalleryView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 40)
                 }
-                .scrollFade(top: 20, bottom: 46)
                 .id(category)
                 .transition(.muroPage(shift: categoryShift))
             }
@@ -141,7 +143,7 @@ struct AppleGalleryView: View {
     }
 
     private var categoryOptions: [PillOption] {
-        [PillOption("All", "全部")] + model.categories.map { PillOption($0, ChineseUI.name($0)) }
+        [PillOption("All", L("All", ctx: "filter"))] + model.categories.map { PillOption($0, categoryTitle($0)) }
     }
 
     /// The Library's small switch, at the same size, so the page reads as two
@@ -192,9 +194,8 @@ struct AppleGalleryView: View {
 
     private var countLine: String {
         let count = shown.count
-        let noun = count == 1 ? "壁纸" : "壁纸"
-        if category == "All" { return "\(count) 张 Apple 壁纸" }
-        return "\(ChineseUI.name(category)) · \(count) 张壁纸"
+        if category == "All" { return LN("%@ wallpapers from Apple", count) }
+        return LN("%@ wallpapers in %@", count, categoryTitle(category))
     }
 
     /// Videos ready to play, and still pictures downloaded, on this page.
@@ -209,14 +210,13 @@ struct AppleGalleryView: View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 10.5, weight: .semibold))
-            Text("本机已下载 \(downloadedCount) 项")
+            Text(L("%@ on this Mac", downloadedCount))
                 .font(.system(size: 12, weight: .semibold))
         }
         .foregroundStyle(Color.muroAccent)
         .padding(.horizontal, 13)
         .frame(height: 30)
-        .background(Capsule().fill(Color.muroAccent.opacity(0.13)))
-        .overlay(Capsule().strokeBorder(Color.muroAccent.opacity(0.28), lineWidth: 1))
+        .modifier(TintedChipSurface())
     }
 
     /// Each card asks for its sharp picture when it comes into view and stops
@@ -244,13 +244,13 @@ struct AppleGalleryView: View {
     private var screenSaversPage: some View {
         let savers = model.screenSavers(matching: store.searchText)
         return ZStack {
-            ScrollView(.vertical, showsIndicators: false) {
+            GlassScrollView(fadeTop: 20, fadeBottom: 46) {
                 Group {
                     // A search that matched none of the eight left a blank
                     // page with the tab still saying 8 (full check,
                     // 2026-10-01). It answers the way the aerials do.
                     if savers.isEmpty {
-                        if model.loaded { noMatchesState(noun: "屏幕保护程序") } else { loadingState }
+                        if model.loaded { noMatchesState(screenSavers: true) } else { loadingState }
                     } else {
                         saverGrid(savers)
                     }
@@ -259,7 +259,6 @@ struct AppleGalleryView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }
-            .scrollFade(top: 20, bottom: 46)
         }
         .padding(.top, 18)
     }
@@ -286,7 +285,7 @@ struct AppleGalleryView: View {
         } else if model.aerials == nil {
             noStoreState
         } else {
-            noMatchesState(noun: "航拍壁纸")
+            noMatchesState(screenSavers: false)
         }
     }
 
@@ -295,7 +294,7 @@ struct AppleGalleryView: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(Color.muroAccent)
-            Text("正在读取 Apple 壁纸…")
+            Text(L("Reading Apple's wallpapers…"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.muroSecondary)
         }
@@ -306,11 +305,10 @@ struct AppleGalleryView: View {
     private var noStoreState: some View {
         VStack(spacing: 12) {
             emptyIcon("macwindow.badge.plus")
-            Text("本机尚无 Apple 壁纸列表")
+            Text(L("Apple's wallpapers are not on this Mac yet"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
-            Text("打开「系统设置」中的「墙纸」页面。"
-                 + "macOS 会生成航拍列表，Muro 随后即可读取。")
+            Text(L("Open System Settings and look at Wallpaper once. macOS writes its list of aerials then, and Muro reads the same list."))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -319,13 +317,12 @@ struct AppleGalleryView: View {
             Button {
                 model.load()
             } label: {
-                Text("重新读取")
+                Text(L("Look Again"))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.muroAccent)
                     .padding(.horizontal, 18)
                     .frame(height: 40)
-                    .background(Capsule().fill(Color.muroAccent.opacity(0.13)))
-                    .overlay(Capsule().strokeBorder(Color.muroAccent.opacity(0.28), lineWidth: 1))
+                    .modifier(TintedChipSurface(interactive: true))
             }
             .buttonStyle(.plain)
             .padding(.top, 6)
@@ -334,15 +331,17 @@ struct AppleGalleryView: View {
         .padding(.vertical, 70)
     }
 
-    private func noMatchesState(noun: String) -> some View {
+    private func noMatchesState(screenSavers: Bool) -> some View {
         VStack(spacing: 12) {
             emptyIcon("sparkle.magnifyingglass")
-            Text("没有匹配的内容")
+            Text(L("Nothing matches that"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.muroInk)
             Text(store.searchText.isEmpty
-                 ? "请尝试其他分类。"
-                 : "没有找到「\(store.searchText)」相关的\(noun)，请尝试其他关键词。")
+                 ? L("Try another category.")
+                 : (screenSavers
+                    ? L("No screen saver called %@. Try another word.", store.searchText)
+                    : L("No aerial called %@. Try another word.", store.searchText)))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.muroSecondary)
                 .multilineTextAlignment(.center)
@@ -359,6 +358,6 @@ struct AppleGalleryView: View {
             .foregroundStyle(Color.muroAccent)
             .frame(width: 54, height: 54)
             .background(Circle().fill(.glassSheen(0.14, 0.05)))
-            .overlay(Circle().strokeBorder(Color.muroInk.opacity(0.16), lineWidth: 1))
+            .overlay(Circle().strokeBorder(Color.muroRim.opacity(0.16), lineWidth: 1))
     }
 }

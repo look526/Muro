@@ -132,9 +132,9 @@ public enum CatalogError: LocalizedError, Equatable {
     /// The headline. Short enough to sit under an icon.
     public var title: String {
         switch self {
-        case .unreachable: return "Muro 无法连接互联网"
-        case .server: return "壁纸目录暂无响应"
-        case .unreadable: return "壁纸目录可能被拦截"
+        case .unreachable: return L("Muro cannot reach the internet")
+        case .server: return L("The wallpaper catalog is not answering")
+        case .unreadable: return L("Something is blocking the wallpaper catalog")
         }
     }
 
@@ -143,21 +143,15 @@ public enum CatalogError: LocalizedError, Equatable {
     public var detail: String {
         switch self {
         case .unreachable:
-            return """
-            请检查网络连接后重试。VPN、防火墙或 DNS 过滤也可能阻止 Muro 访问壁纸。
-            """
+            return L("Check that you are online, then try again. A VPN, a firewall or a DNS filter can also stop Muro reaching its wallpapers.")
         case .server(let status):
-            return """
-            服务器返回错误（\(status)），通常是临时问题，请稍后重试。
-            """
+            return L("The server answered with an error (%@). This is usually temporary, so try again in a minute.", status)
         case .unreadable:
-            return """
-            已连接到目录服务器，但返回的不是壁纸列表。VPN、公司网络或 DNS 过滤可能导致此问题。
-            """
+            return L("Muro reached the catalog but what came back was not the wallpaper list. A VPN, a company network or a DNS filter can do this.")
         }
     }
 
-    public var errorDescription: String? { "\(title). \(detail)" }
+    public var errorDescription: String? { L("%@. %@", title, detail) }
 
     /// Everything that can go wrong on the way to a catalog, sorted into the
     /// three cases. Anything unrecognised counts as unreachable, which is the

@@ -79,6 +79,19 @@ final class ImageImportTests: XCTestCase {
         XCTAssertEqual(image.height, 160)
     }
 
+    func testDesktopStillUsesOriginalPictureAndKeepsItsOrientation() throws {
+        let entry = try importMedia(source: fixture(type: .jpeg, orientation: 6), root: root, keepAudio: true)
+        XCTAssertNil(entry.hasSound)
+        let still = folder.appendingPathComponent("desktop.jpg")
+        try generateImageThumbnail(
+            image: root.appendingPathComponent(entry.file), destination: still, maxDimension: 7680
+        )
+        let source = try XCTUnwrap(CGImageSourceCreateWithURL(still as CFURL, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        XCTAssertEqual(image.width, entry.width)
+        XCTAssertEqual(image.height, entry.height)
+    }
+
     func testSystemImageFormatsImport() throws {
         let supported = CGImageDestinationCopyTypeIdentifiers() as! [String]
         for type in [UTType.tiff, .bmp, .gif, .heic] where supported.contains(type.identifier) {

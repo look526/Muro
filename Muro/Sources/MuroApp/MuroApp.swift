@@ -19,16 +19,19 @@ final class MuroAppDelegate: NSObject, NSApplicationDelegate {
         // After reading, never before: this is what sets the flag that the
         // line above consumes.
         watchForSessionEnd()
+        // Before launch finishes, or a muro:// link that opens Muro is lost.
+        RemoteLinks.install()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The look first, so every window and the menu bar panel open in it.
-        Appearance.shared.apply()
+        Appearance.shared.start()
         Self.applyActivationPolicy()
         engine.onRestingChange = { resting in AppStore.shared.desktopResting = resting }
         AppStore.shared.replayDesktop = { [weak self] in self?.engine.replayAll() }
         engine.start()
         statusBar = StatusBarController(store: AppStore.shared)
+        RemoteLinks.launched()
         watchForHideKey()
         watchForCloseKey()
 
@@ -50,15 +53,22 @@ final class MuroAppDelegate: NSObject, NSApplicationDelegate {
         // The single exception is the first launch after installing, where a
         // menu bar icon and nothing else would read as an app that failed to
         // start.
-        if Self.isFirstEverLaunch() {
+        //
+        // A welcome that was never finished is shown the same way, so quitting
+        // in the middle of it brings it back rather than losing it.
+        let firstLaunch = Self.isFirstEverLaunch()
+        if firstLaunch { AppStore.shared.beginWelcome() }
+        if firstLaunch || AppStore.shared.welcomeActive {
             NSApp.activate(ignoringOtherApps: true)
             // A new install starts with both battery savers on. They were off
             // until someone found them in Settings, which is the opposite of
             // what an app promising very low CPU should do by default (full
             // check, 2026-10-01). Only here, so nothing changes for anyone
             // who already has Muro: their choice, or the old default, stays.
-            AppStore.shared.setAutoPauseLowPower(true)
-            AppStore.shared.setAutoPauseBattery(true)
+            if firstLaunch {
+                AppStore.shared.setAutoPauseLowPower(true)
+                AppStore.shared.setAutoPauseBattery(true)
+            }
         } else {
             // No time limit. Any request for the gallery ends this
             // immediately, and a launch that is slow to put the window up must
@@ -280,11 +290,10 @@ struct MuroApp: App {
 
         Window(MuroWindow.gallery, id: "main") {
             RootView()
-                .environment(\.locale, Locale(identifier: "zh_CN"))
+                .environment(\.locale, Localization.shared.locale)
                 .environmentObject(store)
                 // Its cards let go of their pictures while the window is hidden.
                 .tracksGalleryVisibility()
-                .frame(minWidth: GallerySize.opening.width, minHeight: GallerySize.opening.height)
                 .muroColorScheme()
                 .onAppear {
                     // Here rather than in the delegate: the window is what is
@@ -299,7 +308,7 @@ struct MuroApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("设置…") {
+                Button(L("Settings…")) {
                     openSettingsWindow()
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -308,7 +317,7 @@ struct MuroApp: App {
 
         Window(MuroWindow.settings, id: "settings") {
             SettingsView()
-                .environment(\.locale, Locale(identifier: "zh_CN"))
+                .environment(\.locale, Localization.shared.locale)
                 .environmentObject(store)
                 .muroColorScheme()
                 .onAppear { makeMinimiseHideTheWindow(titled: MuroWindow.settings) }
@@ -322,59 +331,78 @@ struct RootView: View {
     @EnvironmentObject var store: AppStore
 
     var body: some View {
+        // The welcome's small window, until its film has the window full size.
+        let welcoming = store.welcomeActive && !store.welcomeHandoff
         ZStack(alignment: .top) {
             Color.muroBG.ignoresSafeArea()
 
-            // A straight crossfade. The per-tab .id makes SwiftUI treat each
-            // page as insert/remove so the transition actually fires.
-            //
-            // No slide here, unlike everywhere else in the app. See
-            // `.muroTab`: these are whole windows, so moving one moves its
-            // background and resizes the glass tray's corners with it.
-            Group {
-                switch store.tab {
-                case .home: HomeView()
-                case .explore: ExploreView()
-                case .apple: AppleGalleryView()
-                case .library: LibraryView()
+            // The gallery is not built under the welcome until its window has
+            // grown to the gallery's size: a gallery laid out at the welcome's
+            // size would be laid out again, and its minimum size would pull
+            // the window, in the middle of the grow.
+            if !store.welcomeActive || store.welcomeHandoff {
+                // A straight crossfade. The per-tab .id makes SwiftUI treat
+                // each page as insert/remove so the transition actually fires.
+                //
+                // No slide here, unlike everywhere else in the app. See
+                // `.muroTab`: these are whole windows, so moving one moves its
+                // background and resizes the glass tray's corners with it.
+                Group {
+                    switch store.tab {
+                    case .home: HomeView()
+                    case .explore: ExploreView()
+                    case .apple: AppleGalleryView()
+                    case .library: LibraryView()
+                    }
+                }
+                .id(store.tab)
+                .transition(.opacity)
+
+                TopBarBackdrop()
+                TopBar()
+
+                if let preview = store.previewItem {
+                    PreviewView(itemID: preview.id)
+                        .zIndex(10)
+                        .transition(.opacity)
+                }
+
+                // Over everything, top bar included, so the section waits for it.
+                if store.appleNoticeOpen, store.tab == .apple {
+                    AppleNoticeCard()
+                        .zIndex(20)
+                        .transition(.opacity)
                 }
             }
-            .id(store.tab)
-            .transition(.opacity)
 
-            TopBar()
-
-            if let preview = store.previewItem {
-                PreviewView(itemID: preview.id)
-                    .zIndex(10)
-                    .transition(.opacity)
-            }
-
-            // Over everything, top bar included, so the section waits for it.
-            if store.appleNoticeOpen, store.tab == .apple {
-                AppleNoticeCard()
-                    .zIndex(20)
+            if store.welcomeActive {
+                WelcomeFlow()
+                    .zIndex(100)
                     .transition(.opacity)
             }
         }
+        // While the greeting is up its window sets its own size; the floor
+        // only has to stay out of its way.
+        .frame(minWidth: welcoming ? 600 : GallerySize.opening.width,
+               minHeight: welcoming ? 400 : GallerySize.opening.height)
         .animation(.muroTab, value: store.tab)
         .animation(.easeInOut(duration: 0.18), value: store.previewItem?.id)
         .animation(.easeOut(duration: 0.2), value: store.appleNoticeOpen)
-        .alert("无法设置壁纸", isPresented: Binding(
+        .alert(L("Couldn’t set wallpaper"), isPresented: Binding(
             get: { store.applyError != nil },
             set: { if !$0 { store.applyError = nil } }
         )) {
-            Button("确定", role: .cancel) { store.applyError = nil }
+            Button(L("OK"), role: .cancel) { store.applyError = nil }
         } message: {
-            Text(store.applyError ?? "未知错误")
+            Text(store.applyError ?? L("Unknown error"))
         }
-        .alert("无法导入视频", isPresented: Binding(
+        .alert(L("Couldn’t import wallpaper", ctx: "fork"), isPresented: Binding(
             get: { store.importError != nil },
             set: { if !$0 { store.importError = nil } }
         )) {
-            Button("确定", role: .cancel) { store.importError = nil }
+            Button(L("OK"), role: .cancel) { store.importError = nil }
         } message: {
-            Text(store.importError ?? "未知错误")
+            Text(store.importError ?? L("Unknown error"))
         }
         .sheet(item: $store.pendingDelete) { request in
             ConfirmDeleteView(request: request)
@@ -387,29 +415,29 @@ struct RootView: View {
         // The lock screen is set, macOS just has not noticed. A dead-end
         // error here is what people reported; this says what finishes it and
         // offers the button that gets them there.
-        .alert("还需一步", isPresented: $store.lockScreenNeedsSystemSettings) {
-            Button("打开系统设置") {
+        .alert(L("One more step"), isPresented: $store.lockScreenNeedsSystemSettings) {
+            Button(L("Open System Settings")) {
                 store.lockScreenNeedsSystemSettings = false
                 openWallpaperSettings()
             }
-            Button("稍后", role: .cancel) { store.lockScreenNeedsSystemSettings = false }
+            Button(L("Later"), role: .cancel) { store.lockScreenNeedsSystemSettings = false }
         } message: {
-            Text("锁屏壁纸已设置，但 macOS 尚未启用。请打开「系统设置」的「墙纸」页面，选择 Muro 完成设置。")
+            Text(L("Muro set your lock screen wallpaper but macOS has not picked it up yet. Open System Settings, go to Wallpaper, and choose Muro to finish it."))
         }
         // A damaged library.json stops every edit, because Muro will not write
         // over a list it could not read. Saying so is the difference between
         // an app protecting the user's library and an app that has silently
         // stopped responding.
-        .alert("Muro 无法读取壁纸列表", isPresented: $store.libraryUnreadable) {
-            Button("显示文件") {
+        .alert(L("Muro cannot read your wallpaper list"), isPresented: $store.libraryUnreadable) {
+            Button(L("Show the File")) {
                 store.libraryUnreadable = false
                 NSWorkspace.shared.activateFileViewerSelecting([
                     LibraryManifest.manifestURL(root: store.root)
                 ])
             }
-            Button("稍后", role: .cancel) { store.libraryUnreadable = false }
+            Button(L("Later"), role: .cancel) { store.libraryUnreadable = false }
         } message: {
-            Text("壁纸文件仍安全保存在磁盘上。为避免覆盖列表，Muro 已暂停修改。请修复 library.json 或将其移出 Muro 文件夹，然后再收藏、导入或下载壁纸。")
+            Text(L("Your wallpapers are safe on disk, and Muro has stopped rather than overwrite the list with an empty one. Liking, importing and downloading will not work until library.json is repaired or moved out of Muro's folder."))
         }
         .alert(
             Text(store.deleteNotice?.title ?? ""),
@@ -418,7 +446,7 @@ struct RootView: View {
                 set: { if !$0 { store.deleteNotice = nil } }
             )
         ) {
-            Button("确定", role: .cancel) { store.deleteNotice = nil }
+            Button(L("OK"), role: .cancel) { store.deleteNotice = nil }
         } message: {
             Text(store.deleteNotice?.message ?? "")
         }

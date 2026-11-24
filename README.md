@@ -11,6 +11,7 @@
 ![License](https://img.shields.io/badge/License-PolyForm_Shield-green)
 ![Price](https://img.shields.io/badge/Price-Free-brightgreen)
 [![Website](https://img.shields.io/badge/Website-murowallpaper.com-A9C4FF)](https://murowallpaper.com)
+[![Discord](https://img.shields.io/badge/Discord-Join_the_community-5865F2?logo=discord&logoColor=white)](https://discord.gg/w9qtWysSpA)
 [![Download](https://img.shields.io/badge/⬇_Download-Muro-A9C4FF)](../../releases/latest)
 [![Buy a coffee](https://img.shields.io/badge/Buy_a_coffee-FFDD00)](https://github.com/sponsors/MrRockySL)
 
@@ -42,7 +43,8 @@ wallpaper and every feature is unlocked.
 ## Features
 
 - 🌙 **Live video wallpapers.** Looping, seamless, on every display at once.
-- 🔒 **Lock screen live wallpapers.** Play a wallpaper on your lock screen too, not just the desktop. Set it to the desktop, the lock screen, or both, on every display. Requires macOS 26 or newer.
+- 🪄 **Interactive wallpapers.** A new kind of wallpaper that follows your pointer and moves with your Mac's sound. New ones arrive in Explore without an update, and you can import your own. Desktop only, and they use more CPU and RAM than a live wallpaper.
+- 🔒 **Lock screen live wallpapers.** Play a wallpaper on your lock screen too, not just the desktop. Set it to the desktop, the lock screen, or both, on every display. Set the lock screen only, and the desktop keeps your own picture. Requires macOS 26 or newer.
 - 🖥️ **Screen saver.** Muro can be your screen saver as well, playing video rather than a still picture, and you set how long your Mac waits before it starts. Requires macOS 26 or newer.
 - 🍎 **The Apple section.** Apple's aerials, Dynamic Wallpapers and screen savers in a tab of their own. The screen savers come as seamless 4K videos, so they play smoothly on the desktop and the lock screen too.
 - 🪶 **Very low CPU usage.** HEVC decoded in hardware, never on the CPU.
@@ -51,12 +53,16 @@ wallpaper and every feature is unlocked.
 - ⚡ **Smooth or Efficient.** Keep a wallpaper's original frame rate, or drop it to 30 fps to halve the power draw. Your choice, per wallpaper.
 - 🖼️ **Explore gallery.** Browse the catalog, preview full screen, download only what you want.
 - 🔄 **New wallpapers arrive on their own.** The library updates without updating the app. More on that below.
-- 📃 **Playlists.** Rotate through a set on a timer, shuffled or in order. The desktop, the lock screen and the screen saver can each play their own.
+- 📃 **Playlists.** Rotate through a set on the clock, shuffled or in order: every hour means right on the hour, every 30 minutes means :00 and :30. The desktop, the lock screen and the screen saver can each play their own.
 - ⏱️ **Automations.** Give every wallpaper its own time. Ten seconds each, or a full day schedule where each wallpaper has its own hours.
 - ⏸️ **Pause after a set time.** Let a wallpaper play for a while after it changes or after you unlock, then hold still. Set it in seconds, minutes or hours, for everything or for one wallpaper, and turn on Replay on Clear Desktop to get that time again whenever your desktop is clear.
 - 🗑️ **Delete what you do not want.** Remove wallpapers one at a time or several at once, imported videos included.
-- 📥 **Import your own.** Drop in images (JPEG, PNG, HEIC and other macOS-supported image formats) or MP4/MOV/M4V videos. Images keep their original file and can be applied as static desktop wallpapers; multi-frame images use their first frame. Videos get transcoded once to HEVC. Screen savers too: add `.saver` files like XScreenSaver and set them from Muro.
-- 🎛️ **Menu bar controls.** Play, pause, skip and switch wallpapers without opening the app.
+- 📥 **Import your own.** Drop in images (JPEG, PNG, HEIC and other macOS-supported formats) or MP4, MOV and M4V videos. Images keep their original file and apply as static desktop wallpaper; multi-frame images use their first frame. Videos are transcoded to HEVC and keep their sound. You can also import `.saver` screen savers and interactive wallpapers (HTML pages or folders containing one).
+- 🔊 **Sound for your own videos.** Turn on Live Wallpaper Sound in Settings, and videos you add from then on play with their sound. The one you set last is the one you hear.
+- 🎛️ **Menu bar controls.** Play, pause, skip and switch live wallpapers without opening the app. Every display has a page of its own with its own sound button, and your ten most recent live wallpapers are a swipe away.
+- 🔗 **Links from other apps.** A Shortcut, a script or another app can switch to a live wallpaper in your Library, pause it or resume it with a `muro://` link. More on that below.
+- 🌐 **Eleven languages.** English, Simplified and Traditional Chinese, Japanese, Korean, Spanish, French, German, Italian, Brazilian Portuguese and Russian. Muro follows your Mac's language, or you can pick another in Settings or the menu bar.
+- 🌗 **Light, Dark or System.** Muro matches macOS in Light or Dark, with Liquid Glass on macOS 26, or follows your Mac with System.
 - ✨ **Tells you when there is a new Muro.** What's New shows what changed in the release and downloads it for you.
 - 💾 **Space control.** See what each wallpaper costs on disk, remove downloads you're done with, or keep them all on another drive.
 - 🆓 **Free and source available.** Anyone can use it and read the code.
@@ -72,7 +78,7 @@ wallpaper and every feature is unlocked.
 ## What it looks like
 
 <p align="center">
-  <img src="screenshots/muro-6-demo.gif" width="820" alt="The Muro home gallery with a live wallpaper playing behind the featured banner">
+  <img src="screenshots/muro-6.1-demo.gif" width="820" alt="The Muro home gallery with a live wallpaper playing behind the featured banner">
 </p>
 
 <p align="center">
@@ -104,7 +110,8 @@ malware"* warning. To get past it:
    about Muro, and click **Open Anyway**, then **Open** to confirm.
 3. On older macOS, you can right click the app instead, then pick Open twice.
 
-Open Explore, pick a wallpaper, hit Apply. Done.
+The first time Muro opens, it welcomes you with the Muro moon, a choice of
+language and a short film. Then open Explore, pick a wallpaper, hit Apply. Done.
 
 > Muro keeps running in your menu bar after you close the window. That's what
 > keeps your wallpaper playing. Use the menu bar icon to control it, or Quit to
@@ -191,6 +198,85 @@ screen as well.
 
 ---
 
+## Wallpapers that react to you
+
+A live wallpaper is a video. An interactive wallpaper is a small page that draws
+itself as it goes, so it can react to what you do.
+
+**Your pointer.** It follows the pointer on the desktop and answers a click.
+While the pointer is over an app's window it stops reacting, so it never gets in
+the way while you work.
+
+**Your music.** It moves with whatever your Mac is playing. macOS asks once
+whether Muro may listen. Muro only measures how loud the sound is. It never
+records or sends anything.
+
+Muro's own are in Explore under **Interactive Wallpapers**: Eclipse, White Sand,
+Grey Silk and Levi Ackerman. New ones arrive there without an update, and they
+download only when you ask. You can also import your own from the Library: an
+HTML page, or a folder with one. An imported page cannot go online
+or see your other files.
+
+Interactive wallpapers work on the desktop only, because the lock screen and
+the screen saver have no pointer to follow. They use more CPU and RAM than a
+live wallpaper, because the picture is drawn live. Like live wallpapers, they
+pause when the desktop is covered, locked or asleep.
+
+<details>
+<summary>Making your own</summary>
+
+Muro sends your page these events:
+
+- `muro:mouse` with `{x, y, inside}`: where the pointer is, 0 to 1 from the top
+  left. `inside` is false when the pointer is over an app or on another screen.
+- `muro:click` with `{x, y}`
+- `muro:audio` with `{bands, bass, mid, treble, level}`: 64 bands of the sound,
+  each 0 to 1.
+
+</details>
+
+---
+
+## Your own picture, with a live lock screen
+
+Like your desktop picture the way it is? On macOS 26 or newer you can keep it
+and still have a live lock screen. Open a live wallpaper, pick **Lockscreen** in
+the apply card, and set it. The desktop keeps the picture you already have, and
+the lock screen plays the live wallpaper.
+
+You can change that picture in System Settings or Finder any time, and the lock
+screen stays live.
+
+Good to know: this is for a display where Muro plays no live wallpaper on the
+desktop. If Muro also plays there, a picture you set in System Settings takes
+the lock screen too.
+
+---
+
+## Sound for your own videos
+
+Videos you import can play with their sound. Turn on **Live Wallpaper Sound** in
+Settings, and every video you add from then on keeps its sound. The live
+wallpapers from the gallery stay silent.
+
+The live wallpaper with sound that you set last is the one you hear, and the
+others go quiet. With more than one display, each has a page of its own in the
+menu bar with its own sound button, so you can turn another one back on or make
+any of them quiet.
+
+---
+
+## Muro in your language
+
+Muro speaks eleven languages: English, Simplified Chinese, Traditional Chinese,
+Japanese, Korean, Spanish, French, German, Italian, Brazilian Portuguese and
+Russian.
+
+It follows your Mac's language. To pick another, open Settings, or use the
+Language row in the menu bar.
+
+---
+
 ## Your library, your rules
 
 Every wallpaper in your Library has a delete button, and you can select several
@@ -234,8 +320,8 @@ Library tab whenever you want the space back.
 
 ### 中文界面构建
 
-此工作副本的应用界面使用简体中文，壁纸分类保留原始标识，仅转换显示名称。
-自定义视频名称、第三方壁纸标题及远程发布说明保留原文。
+此分支默认使用简体中文，也可以在设置中切换语言或跟随 macOS。
+壁纸分类保留原始标识，仅转换显示名称。自定义壁纸名称及远程发布说明保留原文。
 
 使用已选定的 Xcode 工具链构建 Swift/macOS 项目，通过 mise 执行：
 
@@ -266,6 +352,55 @@ the app uses to take a picture of an imported screen saver.
 
 ---
 
+## Control Muro from other apps
+
+Muro answers `muro://` links, so a script, a Shortcut or another app can change
+the live wallpaper without opening Muro's window:
+
+```bash
+open -g "muro://set?id=<wallpaper id>"                    # every display
+open -g "muro://set?id=<wallpaper id>&display=<UUID>"     # one display
+open -g "muro://set?id=<wallpaper id>&surface=desktop"    # desktop, lockscreen, screensaver or all
+open -g "muro://pause"
+open -g "muro://resume"
+```
+
+A link does what picking the same live wallpaper from the menu bar does, and it
+works whether Muro is running or not. Links are carried out one at a time, in
+the order you send them, so `set` followed by `pause` ends paused.
+
+The ids are in two files in `~/Library/Application Support/Muro`.
+`library.json` lists every live wallpaper in your Library with its `id` and its
+title. `config.json` shows what is playing now, and a display's UUID is its key
+under `perDisplay`, which is there once you have set a live wallpaper on that
+display alone.
+
+Any web page can open a `muro://` link too, so a link can only do safe things:
+
+- `set` works only for a live wallpaper that is already in your Library. A link
+  never starts a download.
+- A link cannot set what macOS shows itself: Apple's still pictures, the drawn
+  wallpapers like Sequoia and Macintosh, and screen savers, Apple's or your own
+  `.saver` files. Set those in Muro.
+- A `display` that isn't connected right now is ignored.
+- At most 16 links wait at a time. Any more are ignored.
+- A link never opens Muro's window and never shows a message.
+
+A link that is ignored, or that could not be finished, is written to the log
+with the reason. This shows it:
+
+```bash
+log stream --predicate 'subsystem == "com.mrrockysl.muro" AND category == "links"'
+```
+
+To turn links off:
+
+```bash
+defaults write com.mrrockysl.muro linksOff -bool true
+```
+
+---
+
 ## How it works
 
 Muro is native the whole way down: Swift, SwiftUI and AVFoundation. No Electron,
@@ -275,6 +410,18 @@ The wallpaper is a video playing in a window that sits just below your desktop
 icons, decoded in hardware by your Mac's video engine, so the CPU barely
 participates. The moment the wallpaper can't be seen, Muro pauses it, and a
 paused wallpaper costs nothing.
+
+---
+
+## Join the community
+
+<div align="center">
+
+Share wallpapers and setups, get help, and see what's coming next on the Muro Discord.
+
+[![Join the Muro Discord](https://img.shields.io/badge/Join%20the%20Muro%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/w9qtWysSpA)
+
+</div>
 
 ---
 
@@ -302,10 +449,17 @@ going and keep Muro free for everyone.
 
 <table>
 <tr>
-<td align="center" valign="top" width="180"><a href="https://github.com/deimosfr"><img src="assets/sponsors/deimosfr.png" width="72" alt="Pierre Mavro"><br><b>Pierre Mavro</b></a><br><sub>Muro's first sponsor.</sub></td>
-<td align="center" valign="top" width="180"><a href="https://github.com/alexblunck"><img src="assets/sponsors/alexblunck.png" width="72" alt="Alexander Blunck"><br><b>Alexander Blunck</b></a><br><sub>Muro's top sponsor.</sub></td>
-<td align="center" valign="top" width="180"><a href="https://github.com/fleurscreed-gif"><img src="assets/sponsors/fleurscreed-gif.png" width="72" alt="fleurscreed-gif"><br><b>fleurscreed-gif</b></a><br><sub>Muro's sponsor.</sub></td>
-<td align="center" valign="top" width="180"><a href="https://github.com/Cycuszek"><img src="assets/sponsors/cycuszek-2.png" width="72" alt="Cycuszek"><br><b>Cycuszek</b></a><br><sub>Muro's sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/deimosfr"><img src="assets/sponsors/deimosfr.png" width="72" alt="Pierre Mavro"><br><b>Pierre Mavro</b></a><br><sub>Muro's first sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/aj-salafee"><img src="assets/sponsors/aj-salafee.png" width="72" alt="aj-salafee"><br><b>aj-salafee</b></a><br><sub>Muro's top sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/alexblunck"><img src="assets/sponsors/alexblunck.png" width="72" alt="Alexander Blunck"><br><b>Alexander Blunck</b></a><br><sub>Muro's top sponsor.</sub></td>
+</tr>
+</table>
+<table>
+<tr>
+<td align="center" valign="top" width="160"><a href="https://github.com/fleurscreed-gif"><img src="assets/sponsors/fleurscreed-gif.png" width="72" alt="fleurscreed-gif"><br><b>fleurscreed-gif</b></a><br><sub>Muro's sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/Cycuszek"><img src="assets/sponsors/cycuszek-2.png" width="72" alt="Cycuszek"><br><b>Cycuszek</b></a><br><sub>Muro's sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/Aladinno"><img src="assets/sponsors/aladinno-2.png" width="72" alt="Aladinno"><br><b>Aladinno</b></a><br><sub>Muro's sponsor.</sub></td>
+<td align="center" valign="top" width="160"><a href="https://github.com/sharperevents-jpg"><img src="assets/sponsors/sharperevents-jpg.png" width="72" alt="sharperevents-jpg"><br><b>sharperevents-jpg</b></a><br><sub>Muro's sponsor.</sub></td>
 </tr>
 </table>
 
@@ -327,9 +481,6 @@ Muro is free for everyone to use, at home or at work. Its code is public under t
 changes. You may not release Muro, or a copy or changed version of it, as your own
 app, free or paid, without my permission. Want to build on it?
 [Open an issue](../../issues) or [email me](mailto:mrrockyslx@gmail.com) first.
-
-Code published before 21 September 2026, including every release up to 5.0, stays
-under the MIT license it came with.
 
 The wallpaper videos are not covered by this license. Each one belongs to its
 original creator and is redistributed here under its own terms. See

@@ -1,4 +1,5 @@
 import SwiftUI
+import MuroKit
 
 /// What the Apple section is, said each time the section opens until the
 /// person ticks "Do not show this message again" (owner, 2026-09-30).
@@ -52,7 +53,7 @@ struct AppleNoticeCard: View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         return VStack(alignment: .leading, spacing: 0) {
             header
-            Text("在 Muro 中浏览 Apple 的动态壁纸和屏幕保护程序：")
+            Text(L("It brings Apple's own live wallpapers and screen savers into Muro:"))
                 .font(.system(size: 13))
                 .foregroundStyle(Color.muroInk.opacity(0.86))
                 .fixedSize(horizontal: false, vertical: true)
@@ -72,26 +73,9 @@ struct AppleNoticeCard: View {
         .padding(.horizontal, 28)
         .padding(.bottom, 20)
         .frame(width: Self.width)
-        .background(surface)
         .modifier(DarkGlass(shape: shape))
-        .overlay(
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [Color.muroInk.opacity(0.3), Color.muroInk.opacity(0.06)],
-                    startPoint: .top, endPoint: .bottom
-                ),
-                lineWidth: 1
-            )
-        )
-        .overlay(alignment: .top) {
-            LinearGradient(
-                colors: [.white.opacity(0), .white.opacity(0.35), .white.opacity(0)],
-                startPoint: .leading, endPoint: .trailing
-            )
-            .frame(height: 1)
-            .padding(.horizontal, 90)
-        }
-        .shadow(color: .black.opacity(0.5), radius: 30, y: 14)
+        // The soft shadow of a macOS sheet, lighter on Light.
+        .shadow(color: .black.opacity(Appearance.shared.isLight ? 0.18 : 0.5), radius: 24, y: 10)
         // Return is Got it (`PrimaryPill`); this is Esc.
         .background {
             Button("", action: close)
@@ -105,15 +89,14 @@ struct AppleNoticeCard: View {
     private var header: some View {
         HStack(spacing: 14) {
             NoticeGlyph(kind: .people, size: 20)
-                .shadow(color: .white.opacity(0.45), radius: 3)
                 .bubbleSurface(size: 40, tint: .white)
             VStack(alignment: .leading, spacing: 3) {
-                Text("关于此专区")
+                Text(L("About this section"))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.muroInk)
-                Text("此专区应社区用户的建议而添加。")
+                Text(L("This section was added by community request."))
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.muroAccent)
+                    .foregroundStyle(Color.muroCaption)
             }
             Spacer(minLength: 0)
         }
@@ -124,13 +107,13 @@ struct AppleNoticeCard: View {
     /// 2026-10-02); the colour on the card is the subtitle and the note.
     private var kinds: some View {
         HStack(alignment: .top, spacing: 12) {
-            kind("航拍", "Apple 拍摄的自然风光、城市、海洋与太空视频") {
+            kind(L("Aerials"), L("Apple's videos of landscapes, cities, oceans and space")) {
                 NoticeGlyph(kind: .aerials, size: 17)
             }
-            kind("动态壁纸", "视频、静态图片，以及由 macOS 实时绘制的壁纸") {
+            kind(L("Dynamic Wallpapers"), L("Videos, still pictures, and a few drawn live by macOS")) {
                 NoticeGlyph(kind: .dynamic, size: 17)
             }
-            kind("屏幕保护程序", "8 款 Apple 屏幕保护程序，包括「你好」和「飘移」") {
+            kind(L("Screen Savers"), L("8 of Apple's own, like Hello and Flurry")) {
                 PlaceGlyph(place: .screenSaver, size: 17)
             }
         }
@@ -145,7 +128,6 @@ struct AppleNoticeCard: View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         return VStack(alignment: .leading, spacing: 12) {
             glyph()
-                .shadow(color: .white.opacity(0.45), radius: 3)
                 .bubbleSurface(size: 34, tint: .white)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -161,8 +143,7 @@ struct AppleNoticeCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(shape.fill(.glassSheen(0.08, 0.025)))
-        .overlay(shape.strokeBorder(Color.muroInk.opacity(0.1), lineWidth: 1))
+        .modifier(KindTile(shape: shape))
     }
 
     /// Muro's own live wallpapers are what the low CPU, RAM and power promise
@@ -172,9 +153,9 @@ struct AppleNoticeCard: View {
         HStack(spacing: 10) {
             NoticeGlyph(kind: .power, size: 15)
                 .opacity(0.72)
-            (Text("这些内容由 Apple 制作，部分内容可能比 Muro 壁纸占用")
-                + Text("更多 CPU、内存和电量").fontWeight(.semibold)
-                + Text("。"))
+            // The stars mark the part in bold, so a translation can put it
+            // wherever its own word order wants it.
+            emphasisedText(L("These are Apple's, not made for Muro, so some of them can use *more CPU, RAM and power* than Muro's own live wallpapers."))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.muroWarn)
                 .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +171,7 @@ struct AppleNoticeCard: View {
             } label: {
                 HStack(spacing: 9) {
                     SelectionTick(isSelected: dontShowAgain, size: 18)
-                    Text("不再显示此提示")
+                    Text(L("Do not show this message again"))
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(dontShowAgain ? Color.muroInk : Color.muroInk.opacity(0.62))
                 }
@@ -199,35 +180,8 @@ struct AppleNoticeCard: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: 0)
-            PrimaryPill(title: "知道了") { close() }
+            PrimaryPill(title: L("Got it")) { close() }
         }
-    }
-
-    /// Dark and nearly solid, brighter at the top where the light lands, with
-    /// the accent glow in the top corner that the sheets have. On the Dark
-    /// look it is solid black with no glow: the bit of glass that showed
-    /// through picked up the warm pictures behind it and read as brown
-    /// (owner, 2026-10-02).
-    private var surface: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        let solid = Appearance.shared.mode == .dark
-        return shape
-            .fill(
-                LinearGradient(
-                    colors: [Color.muroSheetTop.opacity(solid ? 1 : 0.9),
-                             Color.muroSheetBottom.opacity(solid ? 1 : 0.95)],
-                    startPoint: .top, endPoint: .bottom
-                )
-            )
-            .overlay(
-                RadialGradient(
-                    gradient: Gradient(colors: [
-                        Color.muroGlow.opacity(0.16 * Appearance.shared.palette.wash), Color.muroGlow.opacity(0)
-                    ]),
-                    center: UnitPoint(x: 0.12, y: -0.06), startRadius: 0, endRadius: 480
-                )
-                .clipShape(shape)
-            )
     }
 
     private func close() {
@@ -236,22 +190,36 @@ struct AppleNoticeCard: View {
     }
 }
 
-/// Liquid glass on macOS 26 with a dark tint, a thin material before it. The
-/// card's own dark surface sits over it, so the page behind shows only as a
-/// soft blur at the edges; clear glass let it through too much (owner,
-/// 2026-10-02).
-private struct DarkGlass<S: Shape>: ViewModifier {
+/// A pane of Liquid Glass, the menu bar panel's own kind, over the lightly
+/// dimmed section (owner, 2026-11-20). The regular glass on Light too, and
+/// the window's colour under it, so less of the page shows through.
+private struct DarkGlass<S: InsettableShape>: ViewModifier {
     let shape: S
 
-    @ViewBuilder func body(content: Content) -> some View {
-#if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular.tint(Color.muroShade.opacity(0.4)), in: shape)
-        } else {
-            content.background(.ultraThinMaterial, in: shape)
-        }
-#else
-        content.background(.ultraThinMaterial, in: shape)
-#endif
+    /// How much of the window's own colour lies under the glass. With none,
+    /// the pictures of the section showed through too much on Dark, and on
+    /// Light the card could not be seen (owner, 2026-11-21).
+    static var base: Double { 0.35 }
+
+    func body(content: Content) -> some View {
+        content
+            .appleGlass(shape)
+            .background(shape.fill(Color.sysWindow.opacity(Self.base)))
+            .environment(\.muroRegularGlass, true)
+    }
+}
+
+/// One of the three kinds on the card: a piece of Liquid Glass on the glass
+/// card, like the rows of the menu bar panel.
+private struct KindTile: ViewModifier {
+    let shape: RoundedRectangle
+
+    func body(content: Content) -> some View {
+        content
+            // On Light a pane of glass on the white card is white on white,
+            // so it takes the grey of a grouped box in System Settings to be
+            // seen.
+            .background(shape.fill(Appearance.shared.isLight ? Color.sysGroupFill : Color.clear))
+            .appleGlass(shape)
     }
 }

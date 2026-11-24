@@ -4,8 +4,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 6.0.x   | Yes |
-| < 6.0   | Please update |
+| 6.2.x   | Yes |
+| < 6.2   | Please update |
 
 Only the latest release receives security fixes. Updates are published on the
 [Releases](https://github.com/MrRockySL/Muro/releases) page.
@@ -33,7 +33,9 @@ uses so that you can make an informed decision before installing it.
 
 The current app does not request microphone, camera, Screen Recording,
 Accessibility, Full Disk Access, or administrator permission. It does not run
-as root.
+as root. The one permission it can ask for is System Audio Recording, and only
+when you show an interactive wallpaper that moves with sound (see
+**Interactive wallpapers** below).
 
 The main app is signed with no entitlements and is not sandboxed. The embedded
 wallpaper extension's only declared entitlement is the App Sandbox entitlement.
@@ -54,7 +56,12 @@ The main app uses normal user-level access to:
   through macOS's wallpaper store, when you pick one
 - Read the position, size, layer and opacity of on-screen windows, never their
   names or contents, and only while **Play only on desktop** or **Replay on
-  Clear Desktop** is on
+  Clear Desktop** is on, or an interactive wallpaper is shown
+- Run an interactive wallpaper's page, tell it where the pointer is, and tell
+  it how loud the Mac's sound is, only while an interactive wallpaper is shown
+- Answer `muro://` links from other apps, which can switch to a live wallpaper
+  already in your Library and pause or resume (see **Links from other apps**
+  below)
 
 Imported videos stay on your Mac and are not uploaded.
 
@@ -152,6 +159,29 @@ Before Muro sets one of those places on such a Mac, it switches it to **Custom**
 in the same stores, keeping what is on screen, so each place keeps its own
 wallpaper. Muro does not switch it back to Automatic.
 
+A lock screen set from Muro leaves your own picture on the desktop. macOS keeps
+one wallpaper per display for the desktop and the lock screen together, so Muro
+stays in that place and shows your picture on the desktop itself. To do that it
+reads the picture file macOS names as that display's desktop picture, wherever
+you keep it, and keeps a screen-sized copy in
+`~/Library/Application Support/Muro/OwnDesktop`, recorded in
+`own-desktop.json`. The copy is handed to Muro's extension, which draws it on
+the desktop, and it is deleted when the lock screen comes off. If the picture
+is in Desktop, Documents, Downloads or on another drive, macOS may ask you
+first whether Muro may read it. Only one still picture is read this way, never
+a folder, and a picture of your own only for a display where Muro plays nothing
+on the desktop.
+
+If you then set another picture in System Settings or Finder on a display where
+Muro is only the lock screen, Muro notices, copies the new picture the same
+way, and writes its lock screen back into the wallpaper stores, restarting
+`WallpaperAgent` once. The backup of those stores learns your newest picture,
+so removing the lock screen gives that one back. Where Muro also plays on that
+display's desktop, a picture you set in System Settings takes the lock screen
+and Muro lets it go. This is disclosed because it reads a file of yours outside
+Muro's own data directories and writes macOS's wallpaper stores again without a
+click in Muro.
+
 The extension also answers macOS when it asks what the lock wallpaper looks
 like as a still picture. macOS keeps that picture on the Preboot volume and
 draws it on the login screen, before anything of Muro's is running. The image
@@ -233,6 +263,100 @@ hidden window off every screen, and keeps one frame as its card picture in
 `~/Library/Caches/Muro/AppleAerials`. A screen saver that crashes or hangs takes
 only the helper down. The helper is not sandboxed, and macOS runs the same code
 whenever that screen saver is in use, so only import screen savers you trust.
+
+### Interactive wallpapers
+
+Since 6.1, a wallpaper can be an interactive wallpaper: a web page on the
+desktop instead of a video. Muro has a few of its own, and the Library's
+import bar takes yours, as an HTML page or a folder with one in it. Muro copies
+what you choose into `Interactive` in its own library folder and leaves your
+original where it was. None of this runs unless an interactive wallpaper is on
+your desktop or open on its page in Muro: no web view is made and nothing is
+listened to.
+
+Since 6.2, Muro's own interactive wallpapers come from Muro's server, the same
+place as the live wallpapers. Muro downloads a wallpaper's files only when you
+press Download or Preview, into `Hosted Interactive` in its own library folder,
+and checks each file against the size and SHA-256 in the server's list before
+using it. They run under the same rules as a page you import.
+
+**The page.** An interactive wallpaper is shown by macOS's own web engine
+(WebKit), in separate processes that macOS sandboxes. A page you import is code
+written by someone else, so Muro keeps what it can reach small:
+
+- It can read its own folder and nothing else on your Mac.
+- Every request to the internet (`http`, `https`, `ws`, `wss`, `ftp`) is blocked
+  before it leaves, and the page cannot go to another address. Muro's own
+  interactive wallpapers ask the internet for nothing.
+- It keeps nothing between runs: no cookies, no storage, no cache.
+- It cannot open a window, show a dialog, or use the camera or the microphone.
+- It never gets the keyboard, and it gets no real mouse events either: the
+  wallpaper window lets every click through to your desktop.
+
+**The pointer.** A wallpaper window cannot see the mouse, so while an
+interactive wallpaper is shown, Muro observes global mouse-move events and
+left clicks and tells the page where the pointer is on that display, but only
+while the pointer is over the desktop itself. When it moves over an app window
+the page is told only that the pointer has gone, and a click is passed on only
+when it lands on the desktop. Muro checks this from the position and layer of
+on-screen windows, never their names or contents. The page is told a position
+between 0 and 1 and nothing about what is under it. Key events are never
+observed. Nothing is stored or uploaded.
+
+**The sound.** A page can ask to move with the sound your Mac is playing. The
+first time one does, macOS asks whether Muro may record system audio, and
+without your yes the page hears silence. With it, Muro taps the Mac's sound
+output (a Core Audio process tap, macOS 14.2 or later), measures how loud 64
+frequency bands are about forty times a second, and gives the page those 64
+numbers. The sound itself is never kept, written to disk or sent anywhere, and
+the page never receives it. Muro listens only while a page that asked for sound
+is on screen and moving: it stops when the wallpaper is paused, covered, or
+removed, when the Mac is locked or the display sleeps. You can take the
+permission back in System Settings > Privacy & Security > Screen & System Audio
+Recording.
+
+A page still uses your Mac's processor, graphics chip and memory, more than a
+video does, and a badly written one can use a lot. Only import interactive
+wallpapers you trust.
+
+### Links from other apps
+
+Since 6.1, Muro registers the `muro://` link scheme, so a script, a Shortcut or
+another app can change the live wallpaper without opening Muro. macOS lets any
+app open such a link, and a web page can too, once you click **Open Muro** when
+the browser asks. This is disclosed because something outside Muro can now
+change what Muro shows, without a click in Muro. So a link is held to what is
+safe from a page:
+
+- There are three links and nothing else is answered. `muro://set` switches the
+  desktop, the lock screen or the screen saver to a live wallpaper that is
+  already in your Library, on a display that is connected. `muro://pause` and
+  `muro://resume` do what the menu bar's pause does.
+- A link never downloads, imports or deletes anything, and it changes no
+  setting.
+- A link cannot set what macOS shows itself: Apple's still pictures, drawn
+  wallpapers and screen savers. Those are set in Muro only.
+- A link never opens a window and never shows a message. Muro sends nothing
+  back to whoever opened the link, so a link cannot be used to read what is in
+  your Library or anything else on your Mac.
+- Links are carried out one at a time, in the order they came. At most 16 wait
+  and the rest are ignored, and a link longer than 1,024 characters is not read
+  at all.
+
+A link that sets the lock screen or the screen saver does the same work as
+setting it in Muro, which is described under **Lock-screen integration**: the
+video is copied to the extension, the wallpaper stores are written and
+`WallpaperAgent` is restarted. Setting a live wallpaper from a link also stops
+a playlist or automation playing in that place, as setting one by hand does.
+
+A link that is ignored, or that could not be finished, is written to the
+macOS log (subsystem `com.mrrockysl.muro`, category `links`) with the link's
+own text and the reason. Nothing is uploaded.
+
+To turn links off, run
+`defaults write com.mrrockysl.muro linksOff -bool true`. Muro then ignores
+every link. A link can still start Muro when it is not running, because macOS
+opens the app before Muro sees the link.
 
 ### Download Folder
 
@@ -344,7 +468,7 @@ You can inspect and compile the tagged source:
 ```bash
 git clone https://github.com/MrRockySL/Muro.git
 cd Muro
-git checkout v6.0.2
+git checkout v6.2
 swift build -c release --package-path Muro
 ```
 
@@ -370,6 +494,12 @@ assets expected by `Muro/build-app.sh`.
   wallpaper records, which Apple can change without notice.
 - Imported `.saver` screen savers are third-party code: macOS runs them as your
   screen saver, and Muro's picture helper runs them briefly, without a sandbox.
+- An imported interactive wallpaper is third-party code. It runs in macOS's web
+  engine, held to its own folder and off the internet, but it is not reviewed
+  by anyone.
+- Any app, and any web page you let open Muro, can send `muro://` links. A link
+  can only switch to a live wallpaper already in your Library, pause or resume,
+  and links are on unless you turn them off.
 - Muro trusts the URLs and metadata supplied by the default HTTPS catalog.
   The catalog and wallpaper assets have no separate cryptographic signatures,
   hashes, or host pinning.

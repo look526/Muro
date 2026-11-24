@@ -43,6 +43,14 @@ public struct EngineConfig: Codable {
     /// and then freezes. Off (nil = false), Pause After counts only after a
     /// start, an unlock or a wallpaper change, as it always has.
     public var replayOnClearDesktop: Bool?
+    /// Issue #54, "Live Wallpaper Sound". Off (nil = false), every live
+    /// wallpaper plays silent, as it always has. On, a video the person added
+    /// with sound in it plays that sound. See `WallpaperSound`.
+    public var sound: Bool?
+    /// Issue #54. The displays whose sound button in the menu bar is off.
+    /// Every other display's live wallpaper plays its sound, when it has one.
+    /// The live wallpaper keeps moving either way.
+    public var soundOff: [String]?
 
     public init(allDisplays: Assignment? = nil, perDisplay: [String: Assignment] = [:]) {
         self.allDisplays = allDisplays

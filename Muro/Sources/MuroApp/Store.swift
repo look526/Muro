@@ -11,12 +11,9 @@ struct WallpaperItem: Identifiable, Equatable {
     var remote: CatalogEntry?
 
     var id: String { local?.id ?? remote?.id ?? "" }
-    var title: String {
-        let original = local?.title ?? remote?.title ?? ""
-        return isPersonalImport ? original : ChineseUI.name(original)
-    }
+    var originalTitle: String { local?.title ?? remote?.title ?? "" }
+    var title: String { isPersonalImport ? originalTitle : ChineseUI.localizedName(originalTitle) }
     var category: String { local?.category ?? remote?.category ?? "" }
-    var categoryTitle: String { ChineseUI.name(category) }
     var width: Int { local?.width ?? remote?.width ?? 0 }
     var height: Int { local?.height ?? remote?.height ?? 0 }
     var fps: Double { local?.fps ?? remote?.fps ?? 30 }
@@ -27,21 +24,35 @@ struct WallpaperItem: Identifiable, Equatable {
     /// been downloaded, and an undownloaded one has no library entry to
     /// carry the flag. See `AppStore.likedIDs`.
     var liked: Bool = false
-    var isDownloaded: Bool { local != nil }
-    /// A video the person imported themselves. It has no catalog entry, and
+    /// False only for one of Muro's own interactive wallpapers whose copy is
+    /// on this Mac without being in the Library. Download then only adds it.
+    /// See `AppStore.interactiveLibraryIDs`.
+    var inLibrary: Bool = true
+    var isDownloaded: Bool { local != nil && inLibrary }
+    /// A picture or video the person imported themselves. It has no catalog entry, and
     /// the importer files it under its own category, which is what tells it
     /// apart from a download while the catalog cannot be reached (then no
     /// download has a catalog entry either).
     var isImage: Bool { local?.isImage == true }
     var isPersonalImport: Bool {
-        remote == nil && (isImage || local?.category == importedVideoCategory || local?.category == importedImageCategory)
+        remote == nil && (isImage || local?.category == importedVideoCategory)
     }
+    /// An interactive wallpaper (issue #59): a page that moves with the
+    /// pointer and the Mac's sound, where a live wallpaper is a video. It
+    /// plays on the desktop only, and has no size, frame rate or length.
+    var isInteractive: Bool { local?.isInteractive ?? isBuiltInInteractive }
+    /// One of Muro's own interactive wallpapers, hosted beside the live
+    /// wallpapers (`HostedInteractive`). Like a live wallpaper it is
+    /// downloaded only when the person asks, and deleting it from the
+    /// Library deletes its files (owner, 2026-11-19).
+    var isBuiltInInteractive: Bool { InteractiveWallpapers.isBuiltIn(id) }
     var resolutionLabel: String {
         width >= 3200 ? "4K" : (width >= 2200 ? "1440p" : "1080p")
     }
     var metaLine: String {
-        let kind = isImage ? "静态图片" : formatDuration(duration)
-        return "\(categoryTitle) · \(width)×\(height) · \(kind) · \(formatSize(sizeBytes))"
+        if isInteractive { return categoryTitle(InteractiveWallpapers.category) }
+        let kind = isImage ? L("Still picture", ctx: "fork") : formatDuration(duration)
+        return "\(categoryTitle(category)) · \(width)×\(height) · \(kind) · \(formatSize(sizeBytes))"
     }
 
     /// When this wallpaper became available to look at, which is what Explore
@@ -76,15 +87,6 @@ enum ApplySurface: String, CaseIterable {
     case all = "All", desktop = "Desktop", lockscreen = "Lockscreen"
     case screensaver = "Screensaver"
 
-    var title: String {
-        switch self {
-        case .all: return "全部"
-        case .desktop: return "桌面"
-        case .lockscreen: return "锁屏"
-        case .screensaver: return "屏幕保护"
-        }
-    }
-
     /// Whether this choice covers Muro's own desktop engine.
     var coversDesktop: Bool { self == .desktop || self == .all }
     /// Whether it covers the Apple-managed surface the lock screen renders.
@@ -102,6 +104,17 @@ enum ApplySurface: String, CaseIterable {
 
     /// Whether macOS 26 is needed for this choice.
     var needsAppleExtension: Bool { self != .desktop }
+
+    /// The name to show for it. The raw value is what gets saved, so it stays
+    /// in English whatever language Muro is in.
+    var title: String {
+        switch self {
+        case .all: return L("All", ctx: "places")
+        case .desktop: return L("Desktop")
+        case .lockscreen: return L("Lockscreen")
+        case .screensaver: return L("Screensaver")
+        }
+    }
 }
 
 /// What to call the screen built into this Mac.
@@ -129,8 +142,12 @@ enum MacHardware {
         // A Mac mini, Studio or Pro has no built-in screen, so this is only
         // reached when the built-in test itself guessed. Say the honest thing
         // rather than name a machine this might not be.
-        return "内置"
+        return ""
     }()
+
+    /// The name to show, read each time so the honest fallback is in the
+    /// language Muro is in now.
+    static var builtInLabel: String { builtInName.isEmpty ? L("Built-in") : builtInName }
 
     private static func deviceTreeProductName() -> String? {
         let entry = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/product")
@@ -193,18 +210,22 @@ struct AppliedPlace: Identifiable, Equatable {
     /// card corner to fit into.
     var chipLabel: String {
         switch kind {
-        case .desktop: return display?.chipLabel ?? "所有显示器"
-        case .lockScreen: return (display?.chipLabel ?? "所有显示器") + "锁屏"
-        case .screenSaver: return "屏幕保护程序"
+        case .desktop: return display?.chipLabel ?? L("ALL DISPLAYS")
+        case .lockScreen: return L("%@ LOCK", display?.chipLabel ?? L("ALL DISPLAYS"))
+        case .screenSaver: return L("SCREEN SAVER")
         }
     }
 
-    /// For anywhere there is room to read a sentence.
-    var fullLabel: String {
+    /// For anywhere there is room to read a sentence. One whole sentence for
+    /// each place, so every language can order its own words.
+    var appliedLabel: String {
         switch kind {
-        case .desktop: return display?.displayName ?? "所有显示器"
-        case .lockScreen: return "\(display?.displayName ?? "所有显示器")的锁屏"
-        case .screenSaver: return "屏幕保护程序"
+        case .desktop:
+            return display.map { L("Applied on %@", $0.displayName) } ?? L("Applied on all displays")
+        case .lockScreen:
+            return display.map { L("Applied on the %@ lock screen", $0.displayName) }
+                ?? L("Applied on all lock screens")
+        case .screenSaver: return L("Applied on the screen saver")
         }
     }
 }
@@ -223,7 +244,7 @@ struct DisplayInfo: Identifiable, Equatable {
     /// applies, since that is the more useful thing to know about a display
     /// you are choosing between; otherwise say what it actually is.
     var kindLabel: String {
-        isMain ? "主" : (isBuiltIn ? "内置" : "外接")
+        isMain ? L("Main display") : (isBuiltIn ? L("Built-in display") : L("External display"))
     }
 
     var symbolName: String { isBuiltIn ? "laptopcomputer" : "display" }
@@ -235,7 +256,7 @@ struct DisplayInfo: Identifiable, Equatable {
     /// monitor of any brand without Muro knowing a single brand name.
     var displayName: String {
         isBuiltIn || name.localizedCaseInsensitiveContains("built-in")
-            ? MacHardware.builtInName
+            ? MacHardware.builtInLabel
             : name
     }
 
@@ -260,8 +281,17 @@ final class AppStore: ObservableObject {
     let statsSampler = StatsSampler()
 
     enum Tab: String, CaseIterable, Identifiable {
-        case home = "首页", explore = "探索", apple = "Apple 专区", library = "资源库"
+        case home = "Home", explore = "Explore", apple = "Apple", library = "Library"
         var id: String { rawValue }
+        /// The name on the tab, in the selected language.
+        var title: String {
+            switch self {
+            case .home: return L("Home")
+            case .explore: return L("Explore")
+            case .apple: return L("Apple", ctx: "fork")
+            case .library: return L("Library")
+            }
+        }
     }
 
     @Published var tab: Tab = .home
@@ -288,6 +318,25 @@ final class AppStore: ObservableObject {
     /// anything else that should open it later (the menu bar, a first run
     /// after an update) has one switch to flip.
     @Published var whatsNewOpen = false
+    /// The first-launch welcome (`WelcomeView.swift`) is in the gallery window.
+    /// Kept until it is finished, so quitting halfway brings it back next time.
+    @Published var welcomeActive = UserDefaults.standard.bool(forKey: AppStore.welcomePendingKey)
+    /// The welcome's window has grown to the gallery's size and the gallery
+    /// is built under its film, ready for the film to fade into it.
+    @Published var welcomeHandoff = false
+    static let welcomePendingKey = "welcomePending"
+
+    /// A new install: the gallery window greets before it shows anything.
+    func beginWelcome() {
+        UserDefaults.standard.set(true, forKey: Self.welcomePendingKey)
+        welcomeActive = true
+    }
+
+    func finishWelcome() {
+        UserDefaults.standard.removeObject(forKey: Self.welcomePendingKey)
+        welcomeActive = false
+        welcomeHandoff = false
+    }
     /// Whether Home's banner is behind the top bar, for the light look's top
     /// bar, which stays white over the playing wallpaper and turns dark once
     /// the page scrolls under it. Set by Home only when it changes.
@@ -360,6 +409,10 @@ final class AppStore: ObservableObject {
     @Published private(set) var catalogRefreshing = false
 
     private var watcher: DispatchSourceFileSystemObject?
+    /// Apple's wallpaper store, watched for a lock screen macOS has replaced.
+    /// See `watchForReplacedLockScreens`.
+    private var appleStoreWatcher: DispatchSourceFileSystemObject?
+    private var replacedLockScreenCheck: DispatchWorkItem?
     private let scheduler = AutomationScheduler()
     /// A playlist or automation played on the lock screen or the screen saver
     /// runs in one of these, beside the desktop's, so each place can play its
@@ -377,6 +430,22 @@ final class AppStore: ObservableObject {
     /// The still frame behind the video, so the desktop still shows the right
     /// wallpaper when Muro is not running. See DesktopStillService.
     private lazy var desktopStill = DesktopStillService(root: root)
+    /// The person's own desktop picture, for a display where Muro is only the
+    /// lock screen (#58). See `OwnDesktopPicture`.
+    private lazy var ownDesktop = OwnDesktopPictureStore(root: root)
+    /// Displays a lock screen is being set on right now. Their slot is as
+    /// good as Muro's already, so the picture kept for them is not tidied
+    /// away before the lock screen lands.
+    private var lockScreensComing: Set<String> = []
+    /// When Muro last put its lock screen back under a picture on each
+    /// display, and how often macOS has undone that since. See
+    /// `keepLockScreens(under:)`.
+    private var takenBack: [String: (at: Date, undone: Int)] = [:]
+    /// Originals already tried as a display's own picture and not readable,
+    /// so they are not tried again on every look.
+    private var unadoptable = Set<String>()
+    private var adopting = Set<String>()
+    private var stillsRefresh: DispatchWorkItem?
     /// Apple's pictures and drawn wallpapers, which only macOS can show.
     /// See MacOSWallpaperService.
     lazy var macOSWallpapers = MacOSWallpaperService(root: root)
@@ -410,9 +479,14 @@ final class AppStore: ObservableObject {
         // Installs that applied a wallpaper before this shipped have never had
         // a still written, and a display plugged in while Muro was closed has
         // no still either.
-        desktopStill.reconcile(
-            config: config, manifest: stillManifest, lockScreenDisplays: lockScreenOwnedDisplays
-        )
+        reconcileDesktopStills()
+        // Every way a lock screen comes or goes ends here, so the desktop's
+        // picture is looked at again after each of them. A moment later, not
+        // at once: WallpaperAgent has just been restarted, and what it names
+        // as a display's picture is only true once it is back.
+        lockScreen.onLockScreensChanged = { [weak self] in
+            DispatchQueue.main.async { self?.reconcileDesktopStillsSoon() }
+        }
         if !lockScreen.isAvailable { applySurface = .desktop }
         // Seed the default so the Settings field shows the real URL instead
         // of an empty placeholder (getter also falls back when cleared).
@@ -441,6 +515,7 @@ final class AppStore: ObservableObject {
             try? config.save(root: root)
         }
         Task { await refreshCatalog() }
+        Task { await refreshHostedInteractive() }
         Task { await checkForUpdatesIfDue() }
         // Reads Apple's wallpaper plists and may run pluginkit and restart
         // WallpaperAgent, so it must never sit on the launch path.
@@ -448,6 +523,7 @@ final class AppStore: ObservableObject {
         // A lock screen or screen saver step due at launch writes the same
         // store, so the first one waits for this. See `placeSteps`.
         placeSteps = Task { await heal.value }
+        watchForReplacedLockScreens()
         // A monitor plugged in after Muro started has no desktop picture of
         // its own yet, and one unplugged leaves a record to give back.
         NotificationCenter.default.addObserver(
@@ -457,11 +533,7 @@ final class AppStore: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.rememberDisplays()
-                self.desktopStill.reconcile(
-                    config: self.config,
-                    manifest: self.stillManifest,
-                    lockScreenDisplays: self.lockScreenOwnedDisplays
-                )
+                self.reconcileDesktopStills()
             }
         }
         // Newly published wallpapers should show up without quitting the app,
@@ -472,6 +544,7 @@ final class AppStore: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 await self?.refreshCatalog()
+                await self?.refreshHostedInteractive()
                 await self?.checkForUpdatesIfDue()
             }
         }
@@ -537,6 +610,25 @@ final class AppStore: ObservableObject {
             out.append(WallpaperItem(
                 local: entry, remote: remoteByID[entry.id], liked: liked.contains(entry.id)
             ))
+        }
+        // Muro's own interactive wallpapers that are downloaded here.
+        let added = interactiveLibraryIDs
+        for entry in InteractiveWallpapers.builtInEntries() where seen.insert(entry.id).inserted {
+            out.append(WallpaperItem(
+                local: entry, remote: nil, liked: liked.contains(entry.id),
+                inLibrary: added.contains(entry.id)
+            ))
+        }
+        // The rest of them, on the server only. They wait in Explore for
+        // Download, like any live wallpaper.
+        if let base = hostedInteractiveListURL?.deletingLastPathComponent() {
+            for hosted in hostedInteractive.wallpapers
+            where HostedInteractive.isUsable(hosted) && seen.insert(hosted.id).inserted {
+                out.append(WallpaperItem(
+                    local: nil, remote: HostedInteractive.catalogEntry(for: hosted, base: base),
+                    liked: liked.contains(hosted.id)
+                ))
+            }
         }
         for remote in catalog where !seen.contains(remote.id) {
             out.append(WallpaperItem(
@@ -662,6 +754,9 @@ final class AppStore: ObservableObject {
 
     var localItems: [WallpaperItem] {
         if let cachedLocalItems { return cachedLocalItems }
+        // Muro's own interactive wallpapers count as downloaded only once they
+        // are here and in the Library (`isDownloaded`), so only those are
+        // listed.
         let out = items.filter(\.isDownloaded)
         cachedLocalItems = out
         return out
@@ -730,7 +825,7 @@ final class AppStore: ObservableObject {
         if let heroID, let item = item(id: heroID), heroPlayable(item), !item.isPersonalImport {
             return item
         }
-        if let applied = currentAppliedID, let item = item(id: applied), item.isDownloaded,
+        if let applied = currentAppliedID, let item = item(id: applied), heroPlayable(item),
            !item.isPersonalImport {
             return item
         }
@@ -742,7 +837,9 @@ final class AppStore: ObservableObject {
     }
 
     func heroPlayable(_ item: WallpaperItem) -> Bool {
-        item.isDownloaded
+        // The banner plays videos. An interactive wallpaper is a page.
+        if item.isInteractive { return false }
+        return item.isDownloaded
             || (item.id == BundledWallpaper.id && BundledWallpaper.videoURL != nil)
     }
 
@@ -792,6 +889,10 @@ final class AppStore: ObservableObject {
         }
         loadLikes()
         config = EngineConfig.load(root: root)
+        if let saved = HostedInteractive.loadLocalList(root: root), saved != hostedInteractive {
+            hostedInteractive = saved
+        }
+        loadInteractiveLibrary()
         playlists = PlaylistStore.load(root: root)
         automations = AutomationStore.load(root: root)
         syncScheduler()
@@ -799,9 +900,7 @@ final class AppStore: ObservableObject {
         // the desktop picture too. Cheap when nothing changed: a still that is
         // already on disk is set in this same turn, and a screen already
         // showing it is left alone.
-        desktopStill.reconcile(
-            config: config, manifest: stillManifest, lockScreenDisplays: lockScreenOwnedDisplays
-        )
+        reconcileDesktopStills()
     }
 
     /// The scheduler owns the running schedule; the store owns what is on
@@ -847,6 +946,82 @@ final class AppStore: ObservableObject {
         source.setCancelHandler { close(fd) }
         source.resume()
         watcher = source
+    }
+
+    // MARK: - Lock screens macOS replaced
+
+    /// Notices a lock screen macOS has given to something else, so Muro
+    /// stops saying "Applied" for it (#58).
+    ///
+    /// A picture set in System Settings or Finder lands in the same slot as
+    /// Muro's lock screen, and macOS writes it into its wallpaper store, so a
+    /// change there is the moment to look. Coming back to Muro is the other
+    /// one, for anything that happened while the store could not be watched.
+    private func watchForReplacedLockScreens() {
+        guard lockScreen.isAvailable else { return }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.noticeReplacedLockScreens() }
+        }
+        let fd = open(LockScreenService.wallpaperStoreDirectoryURL.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write], queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleReplacedLockScreenCheck()
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        appleStoreWatcher = source
+    }
+
+    /// WallpaperAgent writes its store more than once for one change, and
+    /// Muro's own applies write it too, so look once, after it has gone quiet.
+    private func scheduleReplacedLockScreenCheck() {
+        replacedLockScreenCheck?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.noticeReplacedLockScreens() }
+        replacedLockScreenCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
+    /// Queued behind any lock screen or screen saver step, which writes the
+    /// same store, and never while an apply is running: the store is between
+    /// two answers then.
+    private func noticeReplacedLockScreens() {
+        guard lockScreenAvailable, !applyingLockScreen else { return }
+        let previous = placeSteps
+        placeSteps = Task { [weak self] in
+            await previous?.value
+            await self?.forgetReplacedLockScreens()
+        }
+    }
+
+    private func forgetReplacedLockScreens() async {
+        guard !applyingLockScreen else { return }
+        // What macOS names as each display's desktop picture. While Muro holds
+        // a slot this is a file of the extension's; see LockScreenReplacement.
+        var pictures: [String: URL] = [:]
+        for screen in NSScreen.screens {
+            guard let uuid = displayUUID(for: screen),
+                  let url = NSWorkspace.shared.desktopImageURL(for: screen)
+            else { continue }
+            pictures[uuid] = url
+        }
+        // First the displays where Muro is only the lock screen and the
+        // person set a picture: Muro keeps the picture on the desktop and
+        // goes back into the slot. Whatever is still replaced after that is
+        // let go below, exactly as before.
+        let kept = await keepLockScreens(under: pictures)
+        guard !applyingLockScreen else { return }
+        let changed = await lockScreen.forgetReplacedLockScreens(
+            connectedDisplays: Set(displays.map(\.id)),
+            desktopPictures: pictures
+        )
+        if changed || !kept.isEmpty { objectWillChange.send() }
+        if changed { reconcileDesktopStills() }
     }
 
     func recomputeSize() {
@@ -937,6 +1112,160 @@ final class AppStore: ObservableObject {
         } catch {
             catalogError = CatalogError.classify(error)
         }
+    }
+
+    // MARK: - Interactive wallpapers on the server
+
+    private var hostedInteractiveRefreshing = false
+
+    /// The interactive wallpapers on the server (`HostedInteractive`), as last
+    /// read. Kept beside library.json, so Explore lists them offline too.
+    private var hostedInteractive = HostedInteractive.List() {
+        didSet { invalidateItemCache() }
+    }
+
+    /// Where their list is read: beside the catalog, or the
+    /// `interactiveListURL` default when it is set for testing, the way
+    /// `catalogURL` can be.
+    private var hostedInteractiveListURL: URL? {
+        let override = defaults.string(forKey: "interactiveListURL") ?? ""
+        return URL(string: override)
+            ?? URL(string: catalogURLString).map(HostedInteractive.listURL(catalogURL:))
+    }
+
+    /// Their downloads and syncs, one at a time: each waits for the one
+    /// before it, so a sync never removes or replaces a copy still arriving.
+    private var hostedInteractiveWork: Task<Void, Never>?
+
+    private func runHostedInteractive<T>(_ work: @escaping @MainActor () async -> T) async -> T {
+        let previous = hostedInteractiveWork
+        let task = Task { @MainActor () -> T in
+            await previous?.value
+            return await work()
+        }
+        hostedInteractiveWork = Task { _ = await task.value }
+        return await task.value
+    }
+
+    /// The ones the person has, which stay downloaded: in the Library, on a
+    /// screen, in a playlist or an automation, or downloading right now.
+    private var wantedHostedInteractive: Set<String> {
+        interactiveLibraryIDs
+            .union(protectedWallpaperIDs)
+            .union(downloads.keys)
+            .filter(InteractiveWallpapers.isBuiltIn)
+    }
+
+    /// Reads the list again, at the same moments as the catalog. A new one
+    /// shows in Explore, waiting for Download like any live wallpaper. The
+    /// ones the person has are downloaded when missing or changed (after an
+    /// update from 6.1.1 the three that came inside the app arrive this way,
+    /// so nothing goes missing), and a copy nobody has any more is removed.
+    /// Offline, or with a list that cannot be read, everything stays.
+    func refreshHostedInteractive() async {
+        guard !hostedInteractiveRefreshing, let listURL = hostedInteractiveListURL else { return }
+        hostedInteractiveRefreshing = true
+        defer { hostedInteractiveRefreshing = false }
+        guard let list = try? await HostedInteractive.fetchList(from: listURL) else { return }
+        let listChanged = list != hostedInteractive
+        if listChanged {
+            hostedInteractive = list
+            objectWillChange.send()
+        }
+        let base = listURL.deletingLastPathComponent()
+        let root = self.root
+        let result = await runHostedInteractive { [self] in
+            await HostedInteractive.sync(
+                list: list, base: base, root: root, wanted: wantedHostedInteractive
+            )
+        }
+        if result.changed { hostedInteractiveChanged() }
+        // The engine watches the library folder: this write is what makes it
+        // look again and put an arrived page on a screen that was waiting.
+        if listChanged || result.changed { try? HostedInteractive.saveLocalList(list, root: root) }
+    }
+
+    /// After copies arrive or go: everything that lists them reads again.
+    private func hostedInteractiveChanged() {
+        InteractiveWallpapers.reloadBuiltIn()
+        invalidateItemCache()
+        objectWillChange.send()
+        reconcileDesktopStills()
+    }
+
+    /// Downloads one of them when the person asks: Download or Preview. Its
+    /// progress shows like a live wallpaper's, then it is in the Library.
+    private func downloadHostedInteractive(_ id: String) {
+        guard downloads[id] == nil,
+              let listURL = hostedInteractiveListURL,
+              let entry = hostedInteractive.wallpapers.first(where: { $0.id == id })
+        else { return }
+        downloads[id] = 0
+        let base = listURL.deletingLastPathComponent()
+        let root = self.root
+        let list = hostedInteractive
+        Task {
+            let arrived = await runHostedInteractive { [self] () -> Bool in
+                do {
+                    try await HostedInteractive.download(entry, base: base, root: root) { fraction in
+                        Task { @MainActor in
+                            guard AppStore.shared.downloads[id] != nil else { return }
+                            AppStore.shared.downloads[id] = fraction
+                        }
+                    }
+                } catch {
+                    return false
+                }
+                // In the Library before the next sync can run, so it stays.
+                addInteractiveToLibrary(id: id)
+                return true
+            }
+            downloads[id] = nil
+            guard arrived else { return }
+            hostedInteractiveChanged()
+            try? HostedInteractive.saveLocalList(list, root: root)
+            recomputeSize()
+        }
+    }
+
+    /// Removes the copies of ones that just left the Library.
+    private func deleteHostedInteractiveCopies(_ ids: Set<String>) async {
+        let root = self.root
+        let gone = await runHostedInteractive { () -> Bool in
+            let home = HostedInteractive.folder(root: root)
+            var removed = false
+            for id in ids where HostedInteractive.isSafeID(id) {
+                if (try? FileManager.default.removeItem(at: home.appendingPathComponent(id))) != nil {
+                    removed = true
+                }
+            }
+            return removed
+        }
+        if gone {
+            hostedInteractiveChanged()
+            recomputeSize()
+        }
+    }
+
+    /// Who made an interactive wallpaper, for its page: from its copy, or
+    /// from the list when it is not downloaded.
+    func interactiveAuthor(of id: String) -> String? {
+        if let author = InteractiveWallpapers.author(of: id) { return author }
+        let listed = hostedInteractive.wallpapers.first { $0.id == id }?.author?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return listed?.isEmpty == false ? listed : nil
+    }
+
+    /// The full-size picture on the server of one that is not downloaded,
+    /// and the name its saved copy is kept under.
+    func hostedStill(for id: String) -> (url: URL, cacheID: String)? {
+        guard let base = hostedInteractiveListURL?.deletingLastPathComponent(),
+              let entry = hostedInteractive.wallpapers.first(where: { $0.id == id })
+        else { return nil }
+        return (
+            HostedInteractive.fileURL(base: base, entry: entry, path: InteractiveWallpapers.stillName),
+            "\(id)-\(entry.version)-still"
+        )
     }
 
     /// The Try Again button in Explore.
@@ -1214,7 +1543,7 @@ final class AppStore: ObservableObject {
         fromSchedule: Bool = false
     ) {
         if item.isImage, let surface, surface != .desktop {
-            if !fromSchedule { applyError = "导入的图片目前仅支持设置为桌面壁纸。" }
+            if !fromSchedule { applyError = L("Imported pictures can only be set on the desktop.", ctx: "fork") }
             return
         }
         // A wallpaper whose video was moved or deleted outside Muro keeps its
@@ -1224,12 +1553,16 @@ final class AppStore: ObservableObject {
         // pick does not stop a playlist either. A playlist step just skips.
         if let missing = missingVideo(item) {
             if !fromSchedule {
-                applyError = "找不到「\(missing)」的壁纸文件。"
-                    + "文件可能已被其他程序移动或删除。"
-                    + "请从资源库中删除此项，然后重新下载或导入。"
+                applyError = item.isImage
+                    ? L("The picture file for “%@” is missing. Delete it in the Library, then import it again.", missing, ctx: "fork")
+                    : L("Muro can't find the video for “%@”. It was moved or deleted outside Muro. Delete it in the Library, then download or import it again.", missing)
             }
             return
         }
+        // An interactive wallpaper reacts to the pointer and to sound, which
+        // the lock screen and the screen saver cannot give it. It goes on the
+        // desktop whatever was asked for.
+        let surface = item.isInteractive ? ApplySurface.desktop : surface
         if !fromSchedule {
             stopSchedules(on: placesCovered(by: item, surface: surface ?? .desktop))
         }
@@ -1239,6 +1572,9 @@ final class AppStore: ObservableObject {
             return
         }
         guard item.local != nil else { return }
+        // Whatever path it came by, one of Muro's own interactive wallpapers
+        // on the desktop is in the Library.
+        if item.isBuiltInInteractive { addInteractiveToLibrary(item) }
         Task {
             await applyWallpaper(
                 item, mode: mode, target: target, surface: surface, fromSchedule: fromSchedule
@@ -1259,10 +1595,15 @@ final class AppStore: ObservableObject {
         mode: String,
         target: ApplyTarget,
         surface explicitSurface: ApplySurface?,
-        fromSchedule: Bool = false
+        fromSchedule: Bool = false,
+        quiet: LinkProblems? = nil
     ) async {
         guard var entry = item.local else { return }
         let surface = explicitSurface ?? .desktop
+        guard !entry.isImage || surface == .desktop else {
+            couldNotSet(L("Imported pictures can only be set on the desktop.", ctx: "fork"), quiet)
+            return
+        }
         // Apple ships these at 240 fps, so the Efficient rule below would fire
         // on every one of them, transcode 170 MB of somebody else's video and
         // write the result into `library.json`. Smooth only.
@@ -1289,7 +1630,7 @@ final class AppStore: ObservableObject {
         let appleSurfaces = surface.appleSurfaces
         if !appleSurfaces.isEmpty {
             guard lockScreenAvailable else {
-                applyError = LockScreenServiceError.requiresTahoe.localizedDescription
+                couldNotSet(LockScreenServiceError.requiresTahoe.localizedDescription, quiet)
                 return
             }
             ensureAerialThumbnail(entry)
@@ -1298,12 +1639,18 @@ final class AppStore: ObservableObject {
             guard FileManager.default.fileExists(atPath: videoURL.path),
                   FileManager.default.fileExists(atPath: thumbnailURL.path)
             else {
-                applyError = "找不到已下载的壁纸文件。"
+                couldNotSet(L("The downloaded wallpaper files could not be found."), quiet)
                 return
             }
 
             applyingLockScreen = true
             defer { applyingLockScreen = false }
+            // The lock screen is about to take the slot the desktop's picture
+            // is in. The picture is kept first, so the desktop keeps it.
+            if surface.coversLockScreen {
+                await keepDesktopPictures(under: target)
+            }
+            defer { if surface.coversLockScreen { lockScreensArrived() } }
             do {
                 // One pass per role. They write different keys in Apple's
                 // store, so the screen saver does not displace the lock screen
@@ -1317,7 +1664,13 @@ final class AppStore: ObservableObject {
                         surface: appleSurface,
                         connectedDisplays: knownDisplayIDs
                     )
-                    if outcome == .needsSystemSettings { lockScreenNeedsSystemSettings = true }
+                    if outcome == .needsSystemSettings {
+                        if let quiet {
+                            quiet.list.append("macOS has not picked it up yet: choose Muro in System Settings > Wallpaper")
+                        } else {
+                            lockScreenNeedsSystemSettings = true
+                        }
+                    }
                 }
                 if surface == .all {
                     applyAssignment(
@@ -1329,9 +1682,110 @@ final class AppStore: ObservableObject {
                 objectWillChange.send()
                 recomputeSize()
             } catch {
-                applyError = error.localizedDescription
+                couldNotSet(error.localizedDescription, quiet)
             }
         }
+    }
+
+    // MARK: - muro:// links
+
+    /// What went wrong while a muro:// link's live wallpaper was being set.
+    ///
+    /// Somebody who sets one in Muro is looking at Muro, and is told in an
+    /// alert on the gallery. Nobody is looking when a link runs, and an alert
+    /// on a closed gallery opens the gallery. So what goes wrong for a link
+    /// is collected here and written to the log. See `RemoteLinks`.
+    final class LinkProblems {
+        var list: [String] = []
+    }
+
+    private func couldNotSet(_ message: String, _ quiet: LinkProblems?) {
+        if let quiet { quiet.list.append(message) } else { applyError = message }
+    }
+
+    /// What a `muro://set` link does: `setWallpaper`, for a caller nobody is
+    /// watching. Three things differ.
+    ///
+    /// It returns once the live wallpaper is set, so the next link starts on
+    /// a finished one (see `MuroLinkQueue`).
+    ///
+    /// A lock screen or a screen saver waits its turn in `placeSteps`, behind
+    /// the repair at launch and any playlist step, and behind one that is
+    /// being set in Muro itself. Links used to skip that, and two sent
+    /// together each saved the record the other had not finished writing:
+    /// Muro believed one display still had its old lock screen, and that
+    /// one's staged video was deleted.
+    ///
+    /// What goes wrong is returned for the log and never shown. A link must
+    /// not open a window.
+    ///
+    /// Only for a live wallpaper Muro plays itself. `RemoteLinks` turns the
+    /// ones macOS shows away before this, and they are refused here too.
+    func setWallpaper(
+        fromLink original: WallpaperItem,
+        target: ApplyTarget,
+        surface asked: ApplySurface?
+    ) async -> [String] {
+        var item = original
+        if let missing = missingVideo(item) {
+            return ["the wallpaper file for “\(missing)” was moved or deleted outside Muro"]
+        }
+        guard !AppleAerials.isMacOSOnly(item.id), let entry = item.local else {
+            return ["not a live wallpaper in the Library"]
+        }
+        // An interactive wallpaper goes on the desktop whatever was asked
+        // for, as in `setWallpaper`.
+        let surface = item.isInteractive ? ApplySurface.desktop : asked
+        if item.isImage, let surface, surface != .desktop {
+            return [L("Imported pictures can only be set on the desktop.", ctx: "fork")]
+        }
+        let onApple = !(surface ?? .desktop).appleSurfaces.isEmpty
+        // Before a playlist is stopped for something that cannot be set.
+        if onApple, !lockScreenAvailable {
+            return [LockScreenServiceError.requiresTahoe.localizedDescription]
+        }
+        stopSchedules(on: placesCovered(by: item, surface: surface ?? .desktop))
+        if item.isBuiltInInteractive { addInteractiveToLibrary(item) }
+        let mode = defaultMode(for: item)
+        // A 30 fps copy that is still to be made is made out here. It can
+        // take a minute, and every lock screen step would wait behind it.
+        if mode == "efficient", entry.efficientFile == nil {
+            guard await ensureEfficientVariant(entry),
+                  let refreshed = manifest.wallpapers.first(where: { $0.id == entry.id })
+            else { return ["its 30 fps copy could not be made"] }
+            item.local = refreshed
+        }
+        let problems = LinkProblems()
+        guard onApple else {
+            await applyWallpaper(item, mode: mode, target: target, surface: surface, quiet: problems)
+            return problems.list
+        }
+        let previous = placeSteps
+        let step = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            guard await self.lockScreenIsFree(within: 60) else {
+                problems.list.append("Muro was still setting another lock screen")
+                return
+            }
+            // Nothing waits between the check above and `applyWallpaper`
+            // saying it is setting one, so nothing else starts in between.
+            await self.applyWallpaper(item, mode: mode, target: target, surface: surface, quiet: problems)
+        }
+        placeSteps = step
+        await step.value
+        return problems.list
+    }
+
+    /// Waits until no lock screen or screen saver is being set. False when
+    /// that takes longer than `seconds`.
+    private func lockScreenIsFree(within seconds: Double) async -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while applyingLockScreen {
+            guard Date() < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return true
     }
 
     /// `resume` is false for a playlist or automation step. A wallpaper chosen
@@ -1349,9 +1803,84 @@ final class AppStore: ObservableObject {
         case .display(let uuid):
             config.perDisplay[uuid] = assignment
         }
+        // Issue #54. A live wallpaper with sound chosen by hand is the one
+        // heard: its sound comes on wherever it shows, and the other
+        // displays' go quiet. A playlist or automation step leaves every
+        // sound as it was.
+        if resume, hasSound(id) {
+            let off = WallpaperSound.off(
+                afterApplying: id,
+                off: Set(config.soundOff ?? []),
+                displays: displays.map(\.id),
+                wallpaper: { self.wallpaperID(onDisplay: $0) },
+                hasSound: { uuid in self.wallpaperID(onDisplay: uuid).map(self.hasSound) ?? false }
+            )
+            config.soundOff = off.isEmpty ? nil : off.sorted()
+        }
         if resume { config.paused = false }
         saveConfig()
         pushRecent(id)
+    }
+
+    // MARK: - Sound (issue #54)
+
+    var soundEnabled: Bool { config.sound ?? false }
+
+    func setSoundEnabled(_ on: Bool) {
+        config.sound = on
+        // Turning the sound on is asking to hear it.
+        if on { config.soundOff = nil }
+        saveConfig()
+    }
+
+    /// Whether a live wallpaper is a video the person added that kept its
+    /// sound. Every live wallpaper from the catalogue is silent.
+    func hasSound(_ id: String) -> Bool {
+        manifest.wallpapers.first(where: { $0.id == id })?.hasSound == true
+    }
+
+    /// The live wallpaper on a display, the way the engine resolves it.
+    func wallpaperID(onDisplay uuid: String) -> String? {
+        config.assignment(forDisplayUUID: uuid)?.wallpaperID
+    }
+
+    /// Whether a display's page in the menu bar gets a sound button: Live
+    /// Wallpaper Sound is on and the live wallpaper there has sound.
+    func hasSoundButton(display uuid: String) -> Bool {
+        guard soundEnabled, let id = wallpaperID(onDisplay: uuid) else { return false }
+        return hasSound(id)
+    }
+
+    /// Whether the live wallpaper on a display is being heard, by the rule
+    /// the engine plays it by (`WallpaperSound`). One live wallpaper on
+    /// several displays plays its sound once, so every display showing it
+    /// says the same.
+    func soundIsOn(display uuid: String) -> Bool {
+        guard soundEnabled, let id = wallpaperID(onDisplay: uuid) else { return false }
+        let shown = displays.map(\.id).filter { wallpaperID(onDisplay: $0) != nil }
+        let heard = WallpaperSound.displays(
+            enabled: true,
+            off: Set(config.soundOff ?? []),
+            displays: shown,
+            wallpaper: { self.wallpaperID(onDisplay: $0) },
+            hasSound: { uuid in self.wallpaperID(onDisplay: uuid).map(self.hasSound) ?? false }
+        )
+        return heard.contains { wallpaperID(onDisplay: $0) == id }
+    }
+
+    /// A display's sound button in the menu bar. Turns the sound of the live
+    /// wallpaper there on or off, never the live wallpaper itself. The same
+    /// live wallpaper on other displays is the same sound, so it goes with
+    /// it.
+    func setSound(_ on: Bool, display uuid: String) {
+        var showing: Set<String> = [uuid]
+        if let id = wallpaperID(onDisplay: uuid) {
+            showing.formUnion(displays.map(\.id).filter { wallpaperID(onDisplay: $0) == id })
+        }
+        var off = Set(config.soundOff ?? [])
+        if on { off.subtract(showing) } else { off.formUnion(showing) }
+        config.soundOff = off.isEmpty ? nil : off.sorted()
+        saveConfig()
     }
 
     /// One step of a playlist or automation on the lock screen (`.desktop`,
@@ -1387,6 +1916,10 @@ final class AppStore: ObservableObject {
         guard FileManager.default.fileExists(atPath: videoURL.path),
               FileManager.default.fileExists(atPath: thumbnailURL.path)
         else { return }
+        // A playlist's first step on the lock screen takes every display's
+        // slot, like a lock screen set by hand.
+        if role == .desktop { await keepDesktopPictures(under: .all) }
+        defer { if role == .desktop { lockScreensArrived() } }
         do {
             let outcome = try await lockScreen.showInRotation(
                 entry: entry,
@@ -1577,9 +2110,286 @@ final class AppStore: ObservableObject {
         // Every apply, remove and clear lands here, including every playlist
         // and automation step, so this is the one place the desktop picture
         // has to be kept in step with.
+        reconcileDesktopStills()
+    }
+
+    /// Brings every display's desktop picture into step with what Muro shows
+    /// there. The one call every caller makes, so each of them hands over the
+    /// same facts.
+    private func reconcileDesktopStills() {
+        let holding = muroLockScreenDisplays
+        // A picture is kept only while Muro's lock screen is in that display's
+        // slot. Once it is off, macOS shows the person's picture itself.
+        // Not asked of a Muro that cannot see its lock screens at all (a
+        // build run without its extension): no answer is not "none".
+        if lockScreenAvailable { ownDesktop.forget(ownDesktop.displays.subtracting(holding)) }
         desktopStill.reconcile(
-            config: config, manifest: stillManifest, lockScreenDisplays: lockScreenOwnedDisplays
+            config: config,
+            manifest: stillManifest,
+            lockScreenDisplays: lockScreenOwnedDisplays,
+            muroLockScreens: holding,
+            ownPictures: ownPictureFiles(holding: holding)
         )
+    }
+
+    private func reconcileDesktopStillsSoon() {
+        stillsRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.reconcileDesktopStills() }
+        stillsRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+
+    /// Displays whose slot Muro's own lock screen holds, or is about to.
+    /// Any display Muro has seen, so one that is only unplugged keeps the
+    /// picture kept for it.
+    private var muroLockScreenDisplays: Set<String> {
+        guard lockScreenAvailable else { return [] }
+        return Set(knownDisplayIDs.filter { lockScreen.ownsWallpaperSurface(displayUUID: $0) })
+            .union(lockScreensComing)
+    }
+
+    /// The person's own picture for each display where Muro is the lock
+    /// screen and plays nothing on the desktop (#58).
+    ///
+    /// A display with no picture kept yet may still have one on record from
+    /// before: the picture Muro's first still went over, when Muro also
+    /// played on that desktop. That is the person's desktop too, so it is
+    /// taken up here, once.
+    ///
+    /// While Muro still plays on that desktop, a file of the person's own is
+    /// not opened: Muro has no use for it yet, and opening it can make macOS
+    /// ask them for permission, which somebody who uses Muro for the desktop
+    /// too would be asked for nothing. It is taken up the moment the desktop
+    /// wallpaper comes off. A picture that came with macOS can be read
+    /// without asking anybody, so that one is made ready early and is
+    /// already there to show.
+    private func ownPictureFiles(holding: Set<String>) -> [String: URL] {
+        var out: [String: URL] = [:]
+        for uuid in holding {
+            let muroPlaysHere = config.assignment(forDisplayUUID: uuid) != nil
+            if let file = ownDesktop.picture(forDisplay: uuid) {
+                if !muroPlaysHere { out[uuid] = file }
+            } else if let original = desktopStill.originalPicture(forDisplay: uuid),
+                      !muroPlaysHere || Self.cameWithMacOS(original) {
+                adoptOriginal(original, forDisplay: uuid)
+            }
+        }
+        return out
+    }
+
+    /// Whether this file came with macOS, so reading it never makes macOS ask
+    /// the person whether Muro may.
+    private static func cameWithMacOS(_ file: URL) -> Bool {
+        let path = file.standardizedFileURL.path
+        return path.hasPrefix("/System/") || path.hasPrefix("/Library/")
+    }
+
+    private func adoptOriginal(_ original: URL, forDisplay uuid: String) {
+        let key = uuid + "|" + original.path
+        guard !unadoptable.contains(key), !adopting.contains(key),
+              let screen = screenPixels(forDisplay: uuid)
+        else { return }
+        adopting.insert(key)
+        Task { [weak self] in
+            guard let self else { return }
+            let kept = await self.ownDesktop.remember(original, displayUUID: uuid, screen: screen)
+            self.adopting.remove(key)
+            if kept { self.reconcileDesktopStills() } else { self.unadoptable.insert(key) }
+        }
+    }
+
+    private func screenPixels(forDisplay uuid: String) -> CGSize? {
+        NSScreen.screens.first { displayUUID(for: $0) == uuid }.map {
+            CGSize(
+                width: $0.frame.width * $0.backingScaleFactor,
+                height: $0.frame.height * $0.backingScaleFactor
+            )
+        }
+    }
+
+    /// Keeps the picture that is on each display's desktop, just before
+    /// Muro's lock screen takes that display's slot (#58).
+    ///
+    /// Setting a lock screen used to change the desktop too, to a frame of
+    /// the live wallpaper, because macOS has one slot for both. The picture
+    /// is read here, while macOS still holds it, and handed to the extension
+    /// before the lock screen is written, so the desktop goes on showing it.
+    ///
+    /// A display Muro's lock screen already holds is left as it is: what is
+    /// in its slot is Muro, and the picture kept for it still stands. One
+    /// whose slot holds a still of Muro's own is given the picture that still
+    /// went over. Anything that is not one picture file (an aerial, a
+    /// shuffling folder) is not kept, and that desktop falls back to a frame
+    /// of the live wallpaper as before.
+    private func keepDesktopPictures(under target: ApplyTarget) async {
+        let wanted: [String]
+        switch target {
+        case .all: wanted = displays.map(\.id)
+        case .display(let uuid): wanted = [uuid]
+        }
+        let fresh = Set(wanted.filter { !lockScreen.ownsWallpaperSurface(displayUUID: $0) })
+        guard !fresh.isEmpty else { return }
+        let occupants = await lockScreen.desktopOccupants(displays: fresh)
+        for screen in NSScreen.screens {
+            guard let uuid = displayUUID(for: screen), fresh.contains(uuid) else { continue }
+            var source: URL?
+            switch occupants[uuid] {
+            case .picture(let file)?:
+                source = desktopStill.isMuroStill(file)
+                    ? desktopStill.originalPicture(forDisplay: uuid)
+                    : file
+            case .macOSDefault?:
+                // macOS names the file of its own default wallpaper.
+                source = NSWorkspace.shared.desktopImageURL(for: screen)
+            default:
+                source = nil
+            }
+            let pixels = CGSize(
+                width: screen.frame.width * screen.backingScaleFactor,
+                height: screen.frame.height * screen.backingScaleFactor
+            )
+            if let file = source,
+               !desktopStill.isMuroStill(file),
+               !file.path.contains(LockScreenService.extensionBundleID),
+               // Not a file of the person's own while Muro plays on this
+               // desktop: see `ownPictureFiles`.
+               config.assignment(forDisplayUUID: uuid) == nil || Self.cameWithMacOS(file),
+               await keepPicture(file, forDisplay: uuid, screen: pixels, patience: 4) {
+                continue
+            }
+            ownDesktop.forget([uuid])
+        }
+        lockScreensComing = fresh
+        LockScreenService.prepareExtensionFolder()
+        reconcileDesktopStills()
+    }
+
+    /// Keeps one picture for one display, waiting only so long for it.
+    ///
+    /// The picture is the person's own file, and it can sit in a folder macOS
+    /// guards (Desktop, Documents, Downloads, a drive). The first time Muro
+    /// reads from one, macOS asks the person whether it may, and the read
+    /// waits for their answer for as long as that takes. Nothing that is
+    /// waiting on Muro may wait on that: the read runs off the main thread,
+    /// and whoever asked moves on after `patience` seconds without the
+    /// picture. If the answer comes later and it is yes, the picture is kept
+    /// then, and the desktop is looked at again so it shows.
+    private func keepPicture(
+        _ file: URL, forDisplay uuid: String, screen: CGSize, patience: Double
+    ) async -> Bool {
+        let wait = Flag()
+        let kept = await firstResult(within: patience) { [weak self] () -> Bool in
+            guard let self else { return false }
+            let kept = await self.ownDesktop.remember(file, displayUUID: uuid, screen: screen)
+            if kept, wait.raised { self.reconcileDesktopStills() }
+            return kept
+        }
+        wait.raised = true
+        return kept ?? false
+    }
+
+    /// What `work` returns, or `nil` when it takes longer than `seconds`.
+    /// The work is not stopped: it finishes by itself, unheard.
+    private func firstResult<T>(
+        within seconds: Double, of work: @escaping @MainActor () async -> T
+    ) async -> T? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
+            let answered = Flag()
+            Task { @MainActor in
+                let value = await work()
+                guard !answered.raised else { return }
+                answered.raised = true
+                continuation.resume(returning: value)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(seconds))
+                guard !answered.raised else { return }
+                answered.raised = true
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
+    /// After the lock screen apply that `keepDesktopPictures` came before,
+    /// whether it worked or not.
+    private func lockScreensArrived() {
+        lockScreensComing = []
+        reconcileDesktopStills()
+    }
+
+    /// Puts Muro's lock screen back on each display where the person has just
+    /// set a picture of their own over it, and keeps that picture on the
+    /// desktop (#58). Returns the displays it did that for.
+    ///
+    /// Somebody who uses Muro only for the lock screen sets their desktop
+    /// picture in System Settings or Finder, like on any Mac. macOS has one
+    /// slot for both, so that picture pushed Muro's lock screen out. Now Muro
+    /// takes the picture, shows it on the desktop itself, and goes back into
+    /// the slot. Remove in Muro is how the lock screen comes off.
+    ///
+    /// Only where Muro plays nothing on that display's desktop. Where it
+    /// does, its own window covers the desktop, so the lock screen is the
+    /// only thing a picture set in System Settings can change, and taking it
+    /// back would leave that choice doing nothing at all. There the lock
+    /// screen is let go as before.
+    ///
+    /// **It must not fight macOS.** WallpaperAgent can write its own answer
+    /// back over Muro's, and then this would run again, and again, with the
+    /// screens blinking each time. A picture set after Muro last went back
+    /// in is the person choosing again, and always counts. The same picture
+    /// showing up again is macOS undoing the write: twice, and Muro lets go.
+    private func keepLockScreens(under desktopPictures: [String: URL]) async -> Set<String> {
+        guard lockScreenAvailable else { return [] }
+        // Only the displays where Muro plays nothing on the desktop are
+        // looked at, so on every other one nothing changes and no file of
+        // the person's is opened.
+        let connected = Set(displays.map(\.id).filter { config.assignment(forDisplayUUID: $0) == nil })
+        guard !connected.isEmpty else { return [] }
+        // Finding out whether it is a picture means reading the file, and
+        // macOS may ask the person first (see `keepPicture`). A minute is
+        // long enough to answer; after that the lock screen is let go, as it
+        // would be had they said no.
+        let found = await firstResult(within: 60) { [weak self] () -> [String: OwnDesktopPicture.Pick] in
+            guard let self else { return [:] }
+            return await self.lockScreen.picturesOverLockScreens(
+                connectedDisplays: connected, desktopPictures: desktopPictures
+            )
+        } ?? [:]
+        var wanted: [String: URL] = [:]
+        for (uuid, pick) in found {
+            guard config.assignment(forDisplayUUID: uuid) == nil,
+                  // One of Muro's own files there is Muro's doing, not a
+                  // picture the person set.
+                  !OwnDesktopPicture.isInside(pick.file, root)
+            else { continue }
+            if let last = takenBack[uuid] {
+                if let setAt = pick.setAt, setAt > last.at {
+                    takenBack[uuid] = (last.at, 0)
+                } else if last.undone >= 2 {
+                    continue
+                } else {
+                    takenBack[uuid] = (last.at, last.undone + 1)
+                }
+            }
+            wanted[uuid] = pick.file
+        }
+        for (uuid, file) in wanted {
+            guard let screen = screenPixels(forDisplay: uuid),
+                  await keepPicture(file, forDisplay: uuid, screen: screen, patience: 20)
+            else {
+                wanted[uuid] = nil
+                continue
+            }
+        }
+        guard !wanted.isEmpty, !applyingLockScreen else { return [] }
+        // The extension has the picture before macOS asks it for the desktop.
+        reconcileDesktopStills()
+        applyingLockScreen = true
+        defer { applyingLockScreen = false }
+        let held = await lockScreen.takeBack(displays: Set(wanted.keys))
+        let now = Date()
+        for uuid in held { takenBack[uuid] = (now, takenBack[uuid]?.undone ?? 0) }
+        return held
     }
 
     /// The library as the desktop picture sees it: Muro's own wallpapers and
@@ -1589,6 +2399,7 @@ final class AppStore: ObservableObject {
     private var stillManifest: LibraryManifest {
         var combined = manifest
         combined.wallpapers += AppleAerials.libraryEntries(libraryRoot: root)
+        combined.wallpapers += InteractiveWallpapers.builtInEntries()
         return combined
     }
 
@@ -1601,6 +2412,9 @@ final class AppStore: ObservableObject {
             lockScreen.ownsWallpaperSurface(displayUUID: $0)
                 // An Apple picture set through macOS sits in the same slot.
                 || macOSWallpapers.holdsDesktop(displayUUID: $0)
+                // So does a picture the person set in System Settings or
+                // Finder over Muro's lock screen (#58).
+                || lockScreen.slotTakenByMacOS(displayUUID: $0)
         })
     }
 
@@ -1752,10 +2566,10 @@ final class AppStore: ObservableObject {
         guard let only = places.first else { return nil }
         if places.count == 1 { return only.chipLabel }
         switch appliedSpread(places) {
-        case .everywhere: return "所有位置"
-        case .allDisplays: return "所有显示器"
-        case .allLockScreens: return "所有锁屏"
-        case .some(let count): return "\(count) 个位置"
+        case .everywhere: return L("EVERYWHERE")
+        case .allDisplays: return L("ALL DISPLAYS")
+        case .allLockScreens: return L("ALL LOCK SCREENS")
+        case .some(let count): return LN("%@ PLACES", count)
         }
     }
 
@@ -1767,13 +2581,27 @@ final class AppStore: ObservableObject {
     func appliedFullLabel(for id: String) -> String? {
         let places = appliedPlaces(for: id)
         guard let only = places.first else { return nil }
-        if places.count == 1 { return "已应用到\(only.fullLabel)" }
+        if places.count == 1 { return only.appliedLabel }
         switch appliedSpread(places) {
-        case .everywhere: return "已应用到所有位置"
-        case .allDisplays: return "已应用到所有显示器"
-        case .allLockScreens: return "已应用到所有锁屏"
-        case .some(let count): return "已应用到 \(count) 个位置"
+        case .everywhere: return L("Applied everywhere")
+        case .allDisplays: return L("Applied on all displays")
+        case .allLockScreens: return L("Applied on all lock screens")
+        case .some(let count): return LN("Applied in %@ places", count)
         }
+    }
+
+    // MARK: - Language
+
+    /// Puts Muro into another language, everywhere and at once (issue #62).
+    /// Nil follows the Mac's own language.
+    ///
+    /// The words themselves change through `Localization`, which every view
+    /// that shows text is watching. What is done here is the rest: the lists
+    /// that were built with the old language's names in them.
+    func setLanguage(_ language: MuroLanguage?) {
+        Localization.shared.choose(language)
+        invalidateItemCache()
+        objectWillChange.send()
     }
 
     // MARK: - Likes
@@ -1816,6 +2644,64 @@ final class AppStore: ObservableObject {
         invalidateItemCache()
     }
 
+    /// Muro's own interactive wallpapers the person has put in the Library
+    /// (owner, 2026-11-13). Download and Preview download one and add it
+    /// here (owner, 2026-11-19), and deleting it from the Library takes it
+    /// out and deletes its files, after which Explore offers Download and
+    /// Preview once more, like any other wallpaper. Kept in UserDefaults like
+    /// `likedIDs`, since `library.json` lists the person's own files. 6.1 and
+    /// 6.1.1 kept the same list for the three inside the app, which is how an
+    /// update knows which of them to download.
+    private(set) var interactiveLibraryIDs: Set<String> = []
+
+    /// One already on a desktop counts as added: it was set before the
+    /// Library held these, and it is plainly the person's.
+    private func loadInteractiveLibrary() {
+        var ids = Set(defaults.stringArray(forKey: "interactiveLibraryIDs") ?? [])
+        let shown = playingWallpaperIDs.filter(InteractiveWallpapers.isBuiltIn)
+        if !shown.isSubset(of: ids) {
+            ids.formUnion(shown)
+            defaults.set(Array(ids), forKey: "interactiveLibraryIDs")
+        }
+        guard ids != interactiveLibraryIDs else { return }
+        interactiveLibraryIDs = ids
+        invalidateItemCache()
+    }
+
+    func addInteractiveToLibrary(_ item: WallpaperItem) {
+        guard item.isBuiltInInteractive else { return }
+        addInteractiveToLibrary(id: item.id)
+    }
+
+    private func addInteractiveToLibrary(id: String) {
+        guard InteractiveWallpapers.isBuiltIn(id), !interactiveLibraryIDs.contains(id) else { return }
+        objectWillChange.send()
+        interactiveLibraryIDs.insert(id)
+        defaults.set(Array(interactiveLibraryIDs), forKey: "interactiveLibraryIDs")
+        invalidateItemCache()
+    }
+
+    /// Takes them off the desktop first, as with any wallpaper deleted while
+    /// it shows, then out of the Library. Their files go in `performDelete`,
+    /// once no playlist or automation holds them.
+    private func removeInteractiveFromLibrary(_ ids: Set<String>) {
+        var configChanged = false
+        if let all = config.allDisplays?.wallpaperID, ids.contains(all) {
+            config.allDisplays = nil
+            configChanged = true
+        }
+        let kept = config.perDisplay.filter { !ids.contains($0.value.wallpaperID) }
+        if kept.count != config.perDisplay.count {
+            config.perDisplay = kept
+            configChanged = true
+        }
+        if configChanged { saveConfig() }
+        objectWillChange.send()
+        interactiveLibraryIDs.subtract(ids)
+        defaults.set(Array(interactiveLibraryIDs), forKey: "interactiveLibraryIDs")
+        invalidateItemCache()
+    }
+
     /// Every small manifest edit the interface makes, in one place.
     ///
     /// These used to be `try?`, which turned the one error worth reporting
@@ -1834,6 +2720,16 @@ final class AppStore: ObservableObject {
     // MARK: - Download (remote catalog → local library)
 
     func download(_ item: WallpaperItem) {
+        // Muro's own interactive wallpapers come from their own list on the
+        // server. One whose copy is already here only goes in the Library.
+        if item.isBuiltInInteractive {
+            if item.local != nil {
+                addInteractiveToLibrary(item)
+            } else {
+                downloadHostedInteractive(item.id)
+            }
+            return
+        }
         // Apple's aerials are fetched from Apple, into Muro's own cache. The
         // catalog path below would write them into `library.json` and copy
         // them into `Masters/`, which is exactly what this feature promised
@@ -1876,22 +2772,30 @@ final class AppStore: ObservableObject {
 
     // MARK: - Import
 
+    var importFormats: String {
+        L("JPEG, PNG, HEIC and other images; MP4, MOV and M4V videos; .saver and HTML.", ctx: "fork")
+    }
+
     func importFiles(_ urls: [URL]) {
         guard importStatus == nil else {
-            showImportNote("请等待当前导入完成。")
+            showImportNote(L("Wait for the current import to finish.", ctx: "fork"))
             return
         }
+        // Interactive wallpapers: a page, or a folder with one in it.
+        let pages = urls.filter(InteractiveWallpapers.canImport)
+        if !pages.isEmpty { importInteractive(pages) }
+        let urls = urls.filter { !pages.contains($0) }
         let media = urls.filter(isImportableMedia)
         guard !media.isEmpty else {
             if !urls.isEmpty {
-                importError = "支持 JPEG、PNG、HEIC 等图片、MP4、MOV、M4V 视频及 .saver 屏幕保护程序，未添加任何内容。"
+                importError = L("Nothing was added.", ctx: "fork") + "\n" + importFormats
             }
             return
         }
         let skipped = urls.count - media.count
         let root = self.root
         let known = manifest.wallpapers
-        importStatus = "正在导入…"
+        importStatus = L("Importing") + "…"
         importProgress = 0
         Task.detached(priority: .userInitiated) {
             var failures: [String] = []
@@ -1905,7 +2809,7 @@ final class AppStore: ObservableObject {
                 // are the whole of what they need while they wait; a big file
                 // used to sit at "Importing 1 of 4..." for most of a minute
                 // with nothing moving (full check, 2026-10-01).
-                let label = media.count == 1 ? "正在导入" : "正在导入第 \(index + 1)/\(media.count) 个文件"
+                let label = media.count == 1 ? L("Importing") : L("Importing %@ of %@", index + 1, media.count)
                 await MainActor.run {
                     AppStore.shared.importStatus = label + "…"
                     AppStore.shared.importProgress = 0
@@ -1919,8 +2823,12 @@ final class AppStore: ObservableObject {
                     continue
                 }
                 do {
+                    // A video the person adds keeps its sound (issue #54), so
+                    // turning on Live Wallpaper Sound later needs no import
+                    // again. It plays only while that switch is on.
                     library.append(try importMedia(
-                        source: url, root: root, sourceFingerprint: fingerprint
+                        source: url, root: root, sourceFingerprint: fingerprint,
+                        keepAudio: true
                     ) { done in
                         Task { @MainActor in
                             guard AppStore.shared.importProgress != nil else { return }
@@ -1941,24 +2849,85 @@ final class AppStore: ObservableObject {
                 AppStore.shared.recomputeSize()
                 if !duplicates.isEmpty {
                     AppStore.shared.showImportNote(duplicates.count == 1
-                        ? "「\(duplicates[0])」已在资源库中。"
-                        : "其中 \(duplicates.count) 个文件已在资源库中。")
+                        ? L("%@ is already in your Library.", duplicates[0])
+                        : L("%@ of those files are already in your Library.", duplicates.count, ctx: "fork"))
                 }
                 // Silence here is what made a failed import look like a
                 // no-op: the spinner stopped, nothing appeared, and the user
                 // was told nothing at all.
                 if !report.isEmpty {
                     let heading = report.count == 1
-                        ? "无法导入此文件。"
-                        : "\(media.count) 个文件中有 \(report.count) 个导入失败。"
+                        ? L("This file could not be imported.", ctx: "fork")
+                        : L("%@ of %@ files could not be imported.", report.count, media.count, ctx: "fork")
                     AppStore.shared.importError =
                         ([heading] + report).joined(separator: "\n\n")
                 } else if skipped > 0 {
                     AppStore.shared.importError =
-                        "已跳过 \(skipped) 个文件。"
-                        + "Muro 支持导入 JPEG、PNG、HEIC 等图片及 MP4、MOV、M4V 视频。"
+                        L("Files skipped: %@.", skipped, ctx: "fork") + "\n" + AppStore.shared.importFormats
                 }
             }
+        }
+    }
+
+    /// Adds interactive wallpapers of the person's own (issue #59): each is
+    /// copied into the library, then its picture is taken from the page
+    /// itself. The same page added twice is turned away like a second video.
+    private func importInteractive(_ picked: [URL]) {
+        let root = self.root
+        let known = manifest.wallpapers
+        Task.detached(priority: .userInitiated) {
+            var added: [WallpaperEntry] = []
+            var already: [String] = []
+            var failures: [String] = []
+            var fingerprints = Set(known.compactMap(\.sourceFingerprint))
+            for source in picked {
+                let print = InteractiveWallpapers.fingerprint(of: source)
+                if let print, fingerprints.contains(print) {
+                    already.append(known.first { $0.sourceFingerprint == print }?.title
+                        ?? source.deletingPathExtension().lastPathComponent)
+                    continue
+                }
+                do {
+                    let entry = try InteractiveWallpapers.importPage(source: source, root: root)
+                    if let print { fingerprints.insert(print) }
+                    added.append(entry)
+                } catch InteractiveWallpapers.ImportError.tooLarge {
+                    failures.append(L("%@ is too large. An interactive wallpaper can be up to 500 MB.", source.lastPathComponent))
+                } catch InteractiveWallpapers.ImportError.noPage {
+                    failures.append(L("%@ has no HTML page in it.", source.lastPathComponent))
+                } catch {
+                    failures.append("\(source.lastPathComponent): \(importFailureReason(error))")
+                }
+            }
+            let new = added, duplicates = already, report = failures
+            await MainActor.run {
+                let store = AppStore.shared
+                store.reloadFromDisk()
+                store.recomputeSize()
+                if !new.isEmpty {
+                    store.showImportNote(new.count == 1
+                        ? L("%@ added.", new[0].title)
+                        : L("%@ interactive wallpapers added.", new.count))
+                } else if !duplicates.isEmpty {
+                    store.showImportNote(duplicates.count == 1
+                        ? L("%@ is already in your Library.", duplicates[0])
+                        : L("Those interactive wallpapers are already in your Library."))
+                }
+                if !report.isEmpty { store.importError = report.joined(separator: "\n\n") }
+                for entry in new { store.takePicture(of: entry) }
+            }
+        }
+    }
+
+    /// Takes the picture an imported interactive wallpaper is shown by: the
+    /// page itself, a moment after it has started.
+    private func takePicture(of entry: WallpaperEntry) {
+        let page = resolveLibraryFile(entry.file, root: root)
+        let destination = resolveLibraryFile(entry.thumbnail, root: root)
+        Task { @MainActor in
+            guard await InteractiveSnapshot.save(page: page, to: destination) else { return }
+            // The cards asked for this picture before it was there.
+            self.objectWillChange.send()
         }
     }
 
@@ -1980,9 +2949,14 @@ final class AppStore: ObservableObject {
         let relative = "Masters/\(entry.id)-eff.mov"
         let source = root.appendingPathComponent(entry.file)
         let destination = root.appendingPathComponent(relative)
+        // A video with sound keeps it in its 30 fps copy too (issue #54).
+        let keepAudio = entry.hasSound == true
         do {
             _ = try await Task.detached(priority: .userInitiated) {
-                try transcodeToHEVC(source: source, destination: destination, halveFrameRate: true)
+                try transcodeToHEVC(
+                    source: source, destination: destination, halveFrameRate: true,
+                    keepAudio: keepAudio
+                )
             }.value
             manifest = try LibraryWriter.update(root: root) { fresh in
                 guard let index = fresh.wallpapers.firstIndex(where: { $0.id == entry.id })
@@ -2112,7 +3086,7 @@ final class AppStore: ObservableObject {
 
     private func canSchedule(_ ids: [String], on place: SchedulePlace) -> Bool {
         guard place != .desktop, ids.contains(where: { item(id: $0)?.isImage == true }) else { return true }
-        applyError = "此计划包含静态图片，目前仅支持在桌面播放。"
+        applyError = L("This schedule includes still pictures and can only play on the desktop.", ctx: "fork")
         return false
     }
 
@@ -2303,13 +3277,18 @@ final class AppStore: ObservableObject {
     /// only then does the file go. That is also why an applied wallpaper no
     /// longer has to be protected from deletion: this un-applies it first.
     func deleteWallpapers(_ items: [WallpaperItem]) {
-        let entries = items.filter { !AppleAerials.isAppleID($0.id) }.compactMap(\.local)
+        let entries = items.filter { !AppleAerials.isAppleID($0.id) && !$0.isBuiltInInteractive }
+            .compactMap(\.local)
+        // Muro's own interactive wallpapers come out of the Library at once,
+        // and their files go with a live wallpaper's below.
+        let builtIn = Set(items.filter(\.isBuiltInInteractive).map(\.id))
+        if !builtIn.isEmpty { removeInteractiveFromLibrary(builtIn) }
         let apple = items.map(\.id).filter { appleDownloadFile(id: $0) != nil }
         // The person's own screen savers go to the Trash (owner, 2026-09-30).
         let savers = items.map(\.id).filter(canDeleteScreenSaver)
         if !savers.isEmpty { Task { await deleteScreenSavers(savers) } }
-        guard !entries.isEmpty || !apple.isEmpty else { return }
-        Task { await performDelete(entries, apple: apple) }
+        guard !entries.isEmpty || !apple.isEmpty || !builtIn.isEmpty else { return }
+        Task { await performDelete(entries, apple: apple, interactive: builtIn) }
     }
 
     /// What the interface calls. Nothing deletes without an answer, so the
@@ -2319,7 +3298,10 @@ final class AppStore: ObservableObject {
         // own aerials are not Muro's to touch, and the ones macOS draws have
         // no file at all.
         let deletable = items.filter { item in
-            (AppleAerials.isAppleID(item.id) ? appleDownloadFile(id: item.id) != nil : item.local != nil)
+            // Muro's own interactive wallpapers come out of the Library, and
+            // their files with them. Download brings one back.
+            if item.isBuiltInInteractive { return item.isDownloaded }
+            return (AppleAerials.isAppleID(item.id) ? appleDownloadFile(id: item.id) != nil : item.local != nil)
                 || canDeleteScreenSaver(item.id)
         }
         guard !deletable.isEmpty else { return }
@@ -2330,13 +3312,18 @@ final class AppStore: ObservableObject {
         deleteWallpapers([item])
     }
 
-    private func performDelete(_ entries: [WallpaperEntry], apple: [String] = []) async {
+    private func performDelete(
+        _ entries: [WallpaperEntry], apple: [String] = [], interactive: Set<String> = []
+    ) async {
         // A shared copy is a hard link and would keep a deleted video on disk.
         ShareFile.clear()
         // Downloads from the Apple section go the same way. An aerial macOS
         // keeps a copy of goes on playing from that copy, so it stays where
-        // it is and only Muro's file goes.
-        let ids = Set(entries.map(\.id)).union(apple.filter { !macOSKeepsAerial($0) })
+        // it is and only Muro's file goes. Muro's own interactive wallpapers
+        // leave every list the same way too.
+        let ids = Set(entries.map(\.id))
+            .union(apple.filter { !macOSKeepsAerial($0) })
+            .union(interactive)
 
         // Whether the desktop was showing one of them, for step 5: a playlist
         // or automation playing there has to put something else on.
@@ -2411,11 +3398,11 @@ final class AppStore: ObservableObject {
             savePlaylists()
         }
         if let running = activePlaylistID, emptied.contains(running) {
-            let name = playlists.first { $0.id == running }?.name ?? "此播放列表"
+            let name = playlists.first { $0.id == running }?.name ?? L("The playlist")
             stopPlaylist()
             deleteNotice = StopNotice(
-                title: "播放列表已停止",
-                message: "「\(name)」已无可用壁纸，已停止播放。"
+                title: L("Playlist stopped"),
+                message: L("%@ has no wallpapers left, so it stopped.", name)
             )
         }
         let (prunedAutomations, emptiedAutomations) =
@@ -2425,11 +3412,11 @@ final class AppStore: ObservableObject {
             saveAutomations()
         }
         if let running = activeAutomationID, emptiedAutomations.contains(running) {
-            let name = automations.first { $0.id == running }?.name ?? "此自动化"
+            let name = automations.first { $0.id == running }?.name ?? L("The automation")
             stopAutomation()
             deleteNotice = StopNotice(
-                title: "自动化已停止",
-                message: "「\(name)」已无可用壁纸，已停止播放。"
+                title: L("Automation stopped"),
+                message: L("%@ has no wallpapers left, so it stopped.", name)
             )
         }
 
@@ -2484,6 +3471,11 @@ final class AppStore: ObservableObject {
         if let previewItem, ids.contains(previewItem.id), item(id: previewItem.id) == nil {
             self.previewItem = nil
         }
+
+        // Muro's own interactive wallpapers: their files, now that no screen,
+        // playlist or automation holds them (owner, 2026-11-19). Download
+        // brings one back.
+        if !interactive.isEmpty { await deleteHostedInteractiveCopies(interactive) }
 
         recomputeSize()
     }
@@ -2645,12 +3637,12 @@ final class AppStore: ObservableObject {
         var parts: [String] = []
         let count = plan.removed.count + plan.apple.count
         if count > 0 {
-            parts.append("已移除 \(count) 张壁纸")
-            parts.append("已释放约 \(formatSize(plan.bytes + plan.appleBytes + swept))")
+            parts.append(LN("%@ wallpapers removed", count))
+            parts.append(L("about %@ freed", formatSize(plan.bytes + plan.appleBytes + swept)))
         } else if swept > 0 {
-            parts.append("已清理 \(formatSize(swept)) 残留文件")
+            parts.append(L("%@ of leftovers swept", formatSize(swept)))
         }
-        return parts.isEmpty ? "无需清理" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L("Nothing to clear") : parts.joined(separator: " · ")
     }
 
     /// Manual per-wallpaper space control: delete the local copy of one
@@ -2674,8 +3666,16 @@ final class AppStore: ObservableObject {
     }
 
     func mediaURL(for item: WallpaperItem, mode: String = "smooth") -> URL? {
-        guard let entry = item.local else { return nil }
+        // Interactive wallpapers use `pageURL` instead.
+        guard let entry = item.local, !entry.isInteractive else { return nil }
         let url = resolveVideoURL(entry: entry, mode: mode, root: root)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// The page of an interactive wallpaper, when it is on disk.
+    func pageURL(for item: WallpaperItem) -> URL? {
+        guard let entry = item.local, entry.isInteractive else { return nil }
+        let url = resolveLibraryFile(entry.file, root: root)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
@@ -2700,6 +3700,12 @@ final class AppStore: ObservableObject {
     }
 }
 
+/// One yes or no shared between two pieces of work on the main actor.
+@MainActor
+private final class Flag {
+    var raised = false
+}
+
 /// Readable reason for a failed import. The engine's own descriptions carry a
 /// whole `NSError` dump inside them, which is right for a terminal and wrong
 /// for an alert, so each case gets a plain sentence instead.
@@ -2707,14 +3713,14 @@ func importFailureReason(_ error: Error) -> String {
     if let transcode = error as? TranscodeError {
         switch transcode {
         case .noVideoTrack:
-            return "文件不包含视频轨道。"
+            return L("It has no video track.")
         case .readerFailed:
-            return "无法读取文件，文件可能损坏或格式不受 macOS 支持。"
+            return L("It could not be read. The file may be damaged, or in a format macOS cannot open.")
         case .writerFailed:
-            return "无法转换为 HEVC 格式。"
+            return L("It could not be converted to HEVC.")
         }
     }
-    if error is ThumbnailError { return "无法从视频生成缩略图。" }
+    if error is ThumbnailError { return L("A picture could not be taken from it.") }
     return error.localizedDescription
 }
 

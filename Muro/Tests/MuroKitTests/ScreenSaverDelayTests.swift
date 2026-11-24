@@ -6,6 +6,20 @@ import XCTest
 /// `idleTime` would change when his screen saver starts as a side effect of
 /// running the suite.
 final class ScreenSaverDelayTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        let tables = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Localization", isDirectory: true)
+        Localization.shared.useTables(in: tables)
+        Localization.shared.use(.simplifiedChinese)
+    }
+
+    override func tearDown() {
+        Localization.shared.useTables(in: nil)
+        Localization.shared.use(.english, followingSystem: true)
+        super.tearDown()
+    }
 
     // MARK: The list
 
@@ -60,14 +74,14 @@ final class ScreenSaverDelayTests: XCTestCase {
     }
 
     func testZeroReadsAsNever() {
-        XCTAssertEqual(ScreenSaverDelay.label(ScreenSaverDelay.never), "从不")
+        XCTAssertEqual(ScreenSaverDelay.label(ScreenSaverDelay.never), "永不")
     }
 
     /// Nothing Muro writes is negative, but Apple's key is a plain integer
     /// anyone can put anything in, and a negative one is still a target below
     /// the guard, so it means the same thing.
     func testANegativeValueAlsoReadsAsNever() {
-        XCTAssertEqual(ScreenSaverDelay.label(-30), "从不")
+        XCTAssertEqual(ScreenSaverDelay.label(-30), "永不")
     }
 
     func testAnAbsentPreferenceSaysSoRatherThanNamingADurationMuroDoesNotKnow() {
